@@ -29,7 +29,7 @@
         when message
         do (log :debug "Swank message: ~S" message)
            (case (first message)
-             (:write-string (format t "~&~A" (second message)))
+             (:write-string (write-string (second message)))
              (:new-package
               (setf (connection-package connection)
                     (find-shortest-nickname (rest message))))

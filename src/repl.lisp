@@ -62,6 +62,7 @@
         (unless input
           (format t "~&Bye.~%")
           (return))
+        (fresh-line)
         (loop
           (handler-case
               (progn
