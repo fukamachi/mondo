@@ -1,0 +1,16 @@
+#!/bin/sh
+#|-*- mode:lisp -*-|#
+#|
+exec ros -Q -- $0 "$@"
+|#
+(progn ;;init forms
+  (ros:ensure-asdf)
+  #+quicklisp (ql:quickload '(#:mondo/cli) :silent t))
+
+(defpackage :ros.script.mondo
+  (:use :cl))
+(in-package :ros.script.mondo)
+
+(defun main (&rest argv)
+  (mondo/cli:mondo-command argv))
+;;; vim: set ft=lisp lisp:
