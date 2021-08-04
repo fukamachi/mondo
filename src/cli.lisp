@@ -2,6 +2,9 @@
   (:use #:cl)
   (:import-from #:mondo/repl
                 #:run-repl)
+  (:import-from #:mondo/logger
+                #:*log-level*
+                #:+debug+)
   (:import-from #:mondo/utils
                 #:starts-with)
   (:export #:main
@@ -49,6 +52,7 @@
         while (and option
                    (starts-with "-" option))
         do (case-equal option
+             ("--debug" (setf *log-level* +debug+))
              (otherwise
                (error 'unknown-option
                       :option option)))

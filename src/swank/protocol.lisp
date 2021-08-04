@@ -1,5 +1,7 @@
 (defpackage #:mondo/swank/protocol
   (:use #:cl)
+  (:shadowing-import-from #:mondo/logger
+                          #:log)
   (:import-from #:mondo/utils
                 #:find-shortest-nickname)
   (:import-from #:swank-protocol
@@ -25,7 +27,8 @@
   (wait-for-messages connection)
   (loop for message = (read-message connection)
         when message
-        do (case (first message)
+        do (log :debug "Swank message: ~S" message)
+           (case (first message)
              (:write-string (format t "~&~A" (second message)))
              (:new-package
               (setf (connection-package connection)
@@ -36,9 +39,10 @@
                 (if (eq (first result) :ok)
                     (return (second result))
                     (progn
-                      (format t "~&Result is not ok: ~S~%" result)
+                      (log :error "Result is not ok: ~S" result)
                       (return)))))
-             (otherwise (format t "~&Unknown message: ~S~%" message)))))
+             (otherwise
+               (log :error "Unknown message: ~S" message)))))
 
 (defun swank-eval (connection form-string)
   (check-type connection connection)
