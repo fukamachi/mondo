@@ -68,7 +68,7 @@
             (not (equal text func)))
         (let ((result (swank-arglist *connection* func)))
           (when result
-            (list "" result)))
+            (list "" (color-text :gray result))))
         (let ((results (swank-complete *connection* func)))
           (cons text
                 (first results))))))
