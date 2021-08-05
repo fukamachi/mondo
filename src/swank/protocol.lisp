@@ -22,6 +22,7 @@
   (:export #:swank-eval
            #:swank-rex
            #:swank-complete
+           #:swank-arglist
            #:initialize-swank-repl
            #:invoke-debugger-restart
            #:exit-debugger
@@ -101,6 +102,9 @@
 
 (defun swank-complete (connection prefix &optional (package-name (connection-package connection)))
   (swank-rex connection `(swank:simple-completions ,prefix ',package-name)))
+
+(defun swank-arglist (connection symbol-name &optional (package-name (connection-package connection)))
+  (swank-rex connection `(swank:operator-arglist ,symbol-name ',package-name)))
 
 (defun invoke-debugger-restart (connection level restart-num)
   (request-invoke-restart connection level restart-num)

@@ -2,7 +2,8 @@
   (:use #:cl)
   (:import-from #:mondo/utils
                 #:space-char-p)
-  (:export #:input-complete-p))
+  (:export #:input-complete-p
+           #:function-at-point))
 (in-package #:mondo/sexp)
 
 (defun skip-while (fn stream)
@@ -17,10 +18,6 @@
 
 (defun skip-until (fn stream)
   (skip-while (complement fn) stream))
-
-#+nil
-(defun skip-spaces (stream)
-  (skip-while #'space-char-p stream))
 
 (defun read-string (stream)
   (assert (eql (read-char stream) #\"))
@@ -81,3 +78,16 @@
         (forward-sexp s)
         t)
     (end-of-file () nil)))
+
+(defun function-at-point (input point)
+  (let ((start (min (1- (length input)) point))
+        (level 0))
+    (loop for i from start downto 0
+          for char = (aref input i)
+          if (char= char #\()
+          do (if (zerop level)
+                 (return (subseq input (1+ i)
+                                 (position #\Space input :start (1+ i))))
+                 (decf level))
+          if (char= char #\))
+          do (incf level))))

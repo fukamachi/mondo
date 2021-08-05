@@ -15,13 +15,15 @@
                 #:in-debugger-p
                 #:*debugger-level*)
   (:import-from #:mondo/sexp
-                #:input-complete-p)
+                #:input-complete-p
+                #:function-at-point)
   (:import-from #:mondo/swank
                 #:create-swank-server
                 #:connect-to-swank-server
                 #:initialize-swank-repl
                 #:swank-eval
                 #:swank-complete
+                #:swank-arglist
                 #:invoke-debugger-restart
                 #:process-messages
                 #:debugger
@@ -63,10 +65,15 @@
 
 (defun symbol-complete (text start end)
   (declare (ignore start end))
-  (unless (string= text "")
-    (let ((results (swank-complete *connection* text)))
-      (cons text
-            (first results)))))
+  (let ((func (function-at-point rl:*line-buffer* rl:*point*)))
+    (if (or (string= text "")
+            (not (equal text func)))
+        (let ((result (swank-arglist *connection* func)))
+          (when result
+            (list "" result)))
+        (let ((results (swank-complete *connection* func)))
+          (cons text
+                (first results))))))
 
 (defun newline-or-continue (&rest args)
   (declare (ignore args))
