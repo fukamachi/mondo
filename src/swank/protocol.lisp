@@ -84,6 +84,12 @@
                  (rest message)
                (declare (ignore tid continuations))
                (setf *debugger-level* (1- level))))
+            (:ping
+             (destructuring-bind (thread tag)
+                 (rest message)
+               (let ((*print-case* :downcase))
+                 (send-message-string connection
+                                      (prin1-to-string `(:emacs-pong ,thread ,tag))))))
             (otherwise
               (log :error "Unknown message: ~S" message))))))
 
@@ -108,11 +114,14 @@
 (defun swank-arglist (connection symbol-name &optional (package-name (connection-package connection)))
   (swank-rex connection `(swank:operator-arglist ,symbol-name ',package-name)))
 
-(defun swank-interrupt (connection &optional (thread :repl-thread))
+(defun swank-send (connection form)
   (let ((*print-case* :downcase))
     (send-message-string connection
-                         (prin1-to-string `(:emacs-interrupt ,thread)))
+                         (prin1-to-string form))
     (process-messages connection)))
+
+(defun swank-interrupt (connection &optional (thread :repl-thread))
+  (swank-send connection `(:emacs-interrupt ,thread)))
 
 (defun invoke-debugger-restart (connection level restart-num)
   (request-invoke-restart connection level restart-num)
