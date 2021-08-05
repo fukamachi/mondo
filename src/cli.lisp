@@ -69,6 +69,10 @@
         (when args
           (error 'extra-arguments :args args))
         (run-repl))
+    #+sbcl
+    (sb-sys:interactive-interrupt ()
+      (format *error-output* "~&Bye.~%")
+      (uiop:quit -1 t))
     (mondo-cli-error (e)
       (format *error-output* "~&~C[31m~A~C[0m~%" #\Esc e #\Esc))))
 
