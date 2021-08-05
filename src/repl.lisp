@@ -24,6 +24,7 @@
                 #:swank-eval
                 #:swank-complete
                 #:swank-arglist
+                #:swank-interrupt
                 #:invoke-debugger-restart
                 #:process-messages
                 #:debugger
@@ -153,6 +154,12 @@
           (input
            (fresh-line)
            (handler-case (swank-eval *connection* input)
+             #+sbcl
+             (sb-sys:interactive-interrupt ()
+               (handler-case
+                   (swank-interrupt *connection*)
+                 (debugger (e)
+                   (run-debugger-mode *connection* e))))
              (debugger (e)
                (run-debugger-mode *connection* e))))
           (t

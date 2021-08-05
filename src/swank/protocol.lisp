@@ -15,6 +15,7 @@
                 #:request-create-repl
                 #:request-throw-to-toplevel
                 #:request-invoke-restart
+                #:send-message-string
                 #:emacs-rex
                 #:message-waiting-p
                 #:read-all-messages
@@ -23,6 +24,7 @@
            #:swank-rex
            #:swank-complete
            #:swank-arglist
+           #:swank-interrupt
            #:initialize-swank-repl
            #:invoke-debugger-restart
            #:exit-debugger
@@ -105,6 +107,12 @@
 
 (defun swank-arglist (connection symbol-name &optional (package-name (connection-package connection)))
   (swank-rex connection `(swank:operator-arglist ,symbol-name ',package-name)))
+
+(defun swank-interrupt (connection &optional (thread :repl-thread))
+  (let ((*print-case* :downcase))
+    (send-message-string connection
+                         (prin1-to-string `(:emacs-interrupt ,thread)))
+    (process-messages connection)))
 
 (defun invoke-debugger-restart (connection level restart-num)
   (request-invoke-restart connection level restart-num)
