@@ -4,6 +4,7 @@
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/readline
+                #:print-prompt
                 #:readline
                 #:*line-buffer*
                 #:insert-text
@@ -20,6 +21,7 @@
                 #:connect-to-swank-server
                 #:initialize-swank-repl
                 #:swank-eval
+                #:swank-complete
                 #:invoke-debugger-restart
                 #:process-messages
                 #:debugger
@@ -58,6 +60,13 @@
       (insert-text "     ")
       (complete))
   (values))
+
+(defun symbol-complete (text start end)
+  (declare (ignore start end))
+  (unless (string= text "")
+    (let ((results (swank-complete *connection* text)))
+      (cons text
+            (first results)))))
 
 (defun newline-or-continue (&rest args)
   (declare (ignore args))
@@ -107,6 +116,24 @@
   (bind-key "\\C-i" #'complete-or-indent)
   (bind-key "\\C-m" #'newline-or-continue)
   (bind-key "\\C-j" #'newline-or-continue)
+  (rl:register-function :complete #'symbol-complete)
+  (rl:register-hook :lsmatches (lambda (completions count longest-length)
+                                 (let* ((completions (rest completions))
+                                        (column-size (nth-value 1 (rl:get-screen-size)))
+                                        (item-size (+ 2 longest-length))
+                                        (column-item-count (max 1 (floor column-size item-size)))
+                                        (row-count (ceiling count column-item-count)))
+                                   (when completions
+                                     (fresh-line)
+                                     (loop for row below row-count
+                                           do (loop for column below column-item-count
+                                                    for item = (pop completions)
+                                                    while item
+                                                    do (format t "~vA" item-size item))
+                                           (format t "~%"))
+                                     (fresh-line)
+                                     (print-prompt (prompt-string))
+                                     (rl:on-new-line t)))))
 
   (let* ((server (create-swank-server))
          (*connection* (connect-to-swank-server server)))

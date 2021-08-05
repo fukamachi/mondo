@@ -7,6 +7,7 @@
                 #:insert-text)
   (:import-from #:cffi)
   (:export #:readline
+           #:print-prompt
            #:add-history
            #:bind-key
            #:complete
@@ -32,4 +33,5 @@
   (rl:bind-keyseq key func :keymap keymap))
 
 (defun complete ()
-  (cffi:foreign-funcall "rl_complete" :int 9 :int))
+  (cffi:foreign-funcall "rl_complete" :int 9 :int 0)
+  (cffi:foreign-funcall "rl_possible_completions" :int 1 :int 0))

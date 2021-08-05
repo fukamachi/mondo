@@ -20,6 +20,8 @@
                 #:read-all-messages
                 #:read-message)
   (:export #:swank-eval
+           #:swank-rex
+           #:swank-complete
            #:initialize-swank-repl
            #:invoke-debugger-restart
            #:exit-debugger
@@ -87,6 +89,18 @@
   (check-type form-string string)
   (request-listener-eval connection form-string)
   (process-messages connection))
+
+(defun swank-rex (connection form)
+  (let ((thread-id (connection-thread connection)))
+    (setf (connection-thread connection) t)
+    (unwind-protect
+        (progn
+          (swank-protocol:emacs-rex connection form)
+          (process-messages connection))
+      (setf (connection-thread connection) thread-id))))
+
+(defun swank-complete (connection prefix &optional (package-name (connection-package connection)))
+  (swank-rex connection `(swank:simple-completions ,prefix ',package-name)))
 
 (defun invoke-debugger-restart (connection level restart-num)
   (request-invoke-restart connection level restart-num)
