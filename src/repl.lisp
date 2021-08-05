@@ -8,6 +8,7 @@
                 #:readline
                 #:*line-buffer*
                 #:insert-text
+                #:replace-input
                 #:add-history
                 #:bind-key
                 #:complete)
@@ -54,11 +55,13 @@
         (add-history input))
       input)))
 
-;; TODO
 (defun complete-or-indent (&rest args)
   (declare (ignore args))
   (if (find #\Newline rl:*line-buffer*)
-      (insert-text "    ")
+      (let ((new-input (mondo/sexp:indent-input rl:*line-buffer* (prompt-string))))
+        (if (equal rl:*line-buffer* new-input)
+            (complete)
+            (replace-input new-input)))
       (complete))
   (values))
 

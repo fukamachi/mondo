@@ -13,7 +13,8 @@
            #:complete
 
            #:*line-buffer*
-           #:insert-text))
+           #:insert-text
+           #:replace-input))
 (in-package #:mondo/readline)
 
 (defun print-prompt (prompt-string)
@@ -36,3 +37,7 @@
 (defun complete ()
   (cffi:foreign-funcall "rl_complete" :int 9 :int 0)
   (cffi:foreign-funcall "rl_possible_completions" :int 1 :int 0))
+
+(defun replace-input (new-input)
+  (rl:replace-line "" t)
+  (rl:insert-text new-input))

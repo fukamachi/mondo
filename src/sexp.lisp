@@ -3,7 +3,8 @@
   (:import-from #:mondo/utils
                 #:space-char-p)
   (:export #:input-complete-p
-           #:function-at-point))
+           #:function-at-point
+           #:indent-input))
 (in-package #:mondo/sexp)
 
 (defun skip-while (fn stream)
@@ -79,15 +80,64 @@
         t)
     (end-of-file () nil)))
 
-(defun function-at-point (input point)
+(defun start-at-point (input point)
   (let ((start (min (1- (length input)) point))
         (level 0))
     (loop for i from start downto 0
           for char = (aref input i)
-          if (char= char #\()
-          do (if (zerop level)
-                 (return (subseq input (1+ i)
-                                 (position #\Space input :start (1+ i))))
-                 (decf level))
-          if (char= char #\))
-          do (incf level))))
+          if (and (char= char #\()
+                  (or (= i 0)
+                      (char/= #\\ (aref input (1- i)))))
+          do (when (= (decf level) -1)
+               (return i))
+          if (and (char= char #\))
+                  (or (= i 0)
+                      (char/= #\\ (aref input (1- i)))))
+          do (incf level)
+          finally
+          (let ((atom-start-point
+                  (position-if #'space-char-p
+                               input
+                               :end point
+                               :from-end t)))
+            (return
+              (if atom-start-point
+                  (1+ atom-start-point)
+                  0))))))
+
+(defun function-at-point (input point)
+  (let ((start-point (start-at-point input point)))
+    (subseq input (1+ start-point)
+            (position-if
+              (lambda (char)
+                (or (space-char-p char)
+                    (member char '(#\( #\) #\' #\` #\# #\"))))
+              input :start (1+ start-point)))))
+
+(defun indent-input (input prompt)
+  (let* ((input (if prompt
+                    (format nil "~A~A" prompt input)
+                    input))
+         (point (length input))
+         (beginning-of-line (let ((pos (position #\Newline input
+                                                 :end point
+                                                 :from-end t)))
+                              (if pos
+                                  (1+ pos)
+                                  0)))
+         (start-of-line (or (position-if (lambda (ch) (or (char/= ch #\Space)
+                                                          (char= ch #\Newline))) input
+                                         :start beginning-of-line)
+                            point))
+         (form-point (start-at-point input (max 0 (1- beginning-of-line))))
+         ;; XXX: Currently all forms are indented with +2 spaces.
+         (padding (+ 2 (- form-point (let ((pos (position #\Newline input
+                                                          :end form-point
+                                                          :from-end t)))
+                                       (if pos
+                                           (1+ pos)
+                                           0))))))
+    (concatenate 'string
+                 (subseq input (length prompt) beginning-of-line)
+                 (make-string padding :initial-element #\Space)
+                 (subseq input start-of-line))))
