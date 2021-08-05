@@ -50,7 +50,8 @@
   (let* ((prompt-string (prompt-string))
          (input (readline :prompt prompt-string)))
     (when input
-      (add-history input)
+      (unless (equal input "")
+        (add-history input))
       input)))
 
 ;; TODO

@@ -24,6 +24,7 @@
   (when prompt
     (print-prompt prompt))
   (rl:readline :prompt prompt
+               :erase-empty-line t
                :already-prompted t))
 
 (defun add-history (input)
