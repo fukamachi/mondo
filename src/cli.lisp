@@ -2,6 +2,9 @@
   (:use #:cl)
   (:import-from #:mondo/repl
                 #:run-repl)
+  (:import-from #:mondo/color
+                #:color-text
+                #:*enable-colors*)
   (:import-from #:mondo/logger
                 #:*log-level*
                 #:+debug+)
@@ -47,11 +50,35 @@
                                    :test #'equal)
                              ,@body))))))
 
+(defun print-version ()
+  (format *error-output*
+          "~&mondo ~A~%" (asdf:component-version (asdf:find-system :mondo)))
+  (uiop:quit))
+
+(defun print-usage ()
+  (format *error-output*
+          "~&Usage: mondo [OPTIONS...]
+
+OPTIONS:
+    --no-color
+        Disable colors
+    --version
+        Print version
+    --help
+        Print this message
+    --debug
+        Print debug logs
+")
+  (uiop:quit))
+
 (defun parse-argv (argv)
   (loop for option = (pop argv)
         while (and option
                    (starts-with "-" option))
         do (case-equal option
+             ("--no-color" (setf *enable-colors* nil))
+             ("--version" (print-version))
+             ("--help" (print-usage))
              ("--debug" (setf *log-level* +debug+))
              (otherwise
                (error 'unknown-option
@@ -74,7 +101,7 @@
       (format *error-output* "~&Bye.~%")
       (uiop:quit -1 t))
     (mondo-cli-error (e)
-      (format *error-output* "~&~C[31m~A~C[0m~%" #\Esc e #\Esc))))
+      (format *error-output* (color-text :red e)))))
 
 (defun main ()
   (destructuring-bind (&optional $0 &rest argv)
