@@ -46,10 +46,7 @@
                *debugger-level*)
           (connection-package *connection*)))
 
-(defvar *line-continue-p* nil)
-
 (defun read-input ()
-  (setf *line-continue-p* nil)
   (let* ((prompt-string (prompt-string))
          (input (readline :prompt prompt-string)))
     (when input
@@ -59,8 +56,8 @@
 ;; TODO
 (defun complete-or-indent (&rest args)
   (declare (ignore args))
-  (if *line-continue-p*
-      (insert-text "     ")
+  (if (find #\Newline rl:*line-buffer*)
+      (insert-text "    ")
       (complete))
   (values))
 
@@ -80,9 +77,7 @@
   (declare (ignore args))
   (if (input-complete-p rl:*line-buffer*)
       (setf rl:*done* 1)
-      (progn
-        (setf *line-continue-p* t)
-        (insert-text (format nil "~%")))))
+      (insert-text (format nil "~%"))))
 
 (defun run-debugger-mode (connection initial-error)
   (let ((current-error initial-error))
