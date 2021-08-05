@@ -106,6 +106,7 @@
 (defun run-repl ()
   (bind-key "\\C-i" #'complete-or-indent)
   (bind-key "\\C-m" #'newline-or-continue)
+  (bind-key "\\C-j" #'newline-or-continue)
 
   (let* ((server (create-swank-server))
          (*connection* (connect-to-swank-server server)))
