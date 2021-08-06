@@ -49,49 +49,48 @@
   (let (debugger)
     (loop for message = (read-message connection)
           when message
-          do (log :debug "Swank message: ~S" message)
-          (case (first message)
-            (:write-string (write-string (second message)))
-            (:new-package
-             (setf (connection-package connection)
-                   (find-shortest-nickname (rest message))))
-            ((:new-features :indentation-update))
-            (:return
-             (let ((result (second message)))
-               (case (first result)
-                 ((:ok :abort)
-                  (return (values (second result) (first result))))
-                 (otherwise
-                   (log :error "Unexpected result: ~S" result)
-                   (return)))))
-            (:debug
-             (destructuring-bind (tid level condition restarts frames continuations)
-                 (rest message)
-               (declare (ignore tid continuations))
-               (format t "~&~{~A~%~}" (remove-if #'null condition))
-               (format t "~2&Backtrace:~%")
-               (loop for (num frame) in frames
-                     do (format t "~&~A: ~A~%" num frame))
-               (format t "~2&Restarts:~%")
-               (loop for i from 0
-                     for (name description) in restarts
-                     do (format t "~&  ~D: [~A] ~A~%" i name description))
-               (setf *debugger-level* level)
-               (setf debugger (make-condition 'debugger :restarts restarts :level level))))
-            (:debug-activate (error debugger))
-            (:debug-return
-             (destructuring-bind (tid level continuations)
-                 (rest message)
-               (declare (ignore tid continuations))
-               (setf *debugger-level* (1- level))))
-            (:ping
-             (destructuring-bind (thread tag)
-                 (rest message)
-               (let ((*print-case* :downcase))
-                 (send-message-string connection
-                                      (prin1-to-string `(:emacs-pong ,thread ,tag))))))
-            (otherwise
-              (log :error "Unknown message: ~S" message))))))
+          do (case (first message)
+               (:write-string (write-string (second message)))
+               (:new-package
+                (setf (connection-package connection)
+                      (find-shortest-nickname (rest message))))
+               ((:new-features :indentation-update))
+               (:return
+                (let ((result (second message)))
+                  (case (first result)
+                    ((:ok :abort)
+                     (return (values (second result) (first result))))
+                    (otherwise
+                      (log :error "Unexpected result: ~S" result)
+                      (return)))))
+               (:debug
+                (destructuring-bind (tid level condition restarts frames continuations)
+                    (rest message)
+                  (declare (ignore tid continuations))
+                  (format t "~&~{~A~%~}" (remove-if #'null condition))
+                  (format t "~2&Backtrace:~%")
+                  (loop for (num frame) in frames
+                        do (format t "~&~A: ~A~%" num frame))
+                  (format t "~2&Restarts:~%")
+                  (loop for i from 0
+                        for (name description) in restarts
+                        do (format t "~&  ~D: [~A] ~A~%" i name description))
+                  (setf *debugger-level* level)
+                  (setf debugger (make-condition 'debugger :restarts restarts :level level))))
+               (:debug-activate (error debugger))
+               (:debug-return
+                (destructuring-bind (tid level continuations)
+                    (rest message)
+                  (declare (ignore tid continuations))
+                  (setf *debugger-level* (1- level))))
+               (:ping
+                (destructuring-bind (thread tag)
+                    (rest message)
+                  (let ((*print-case* :downcase))
+                    (send-message-string connection
+                                         (prin1-to-string `(:emacs-pong ,thread ,tag))))))
+               (otherwise
+                 (log :error "Unknown message: ~S" message))))))
 
 (defun swank-eval (connection form-string)
   (check-type connection connection)
