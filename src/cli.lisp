@@ -99,7 +99,7 @@ OPTIONS:
     #+sbcl
     (sb-sys:interactive-interrupt ()
       (format *error-output* "~&Bye.~%")
-      (uiop:quit -1 t))
+      (uiop:quit -1))
     (mondo-cli-error (e)
       (format *error-output* (color-text :red e)))))
 
