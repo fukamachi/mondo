@@ -132,6 +132,7 @@
 
 (defun initialize-swank-repl (connection)
   (unless (eql (connection-thread connection) 1)
+    (log :debug "Initializing Swank REPL")
     (request-swank-require connection '(swank-repl))
     (process-messages connection)
     (request-create-repl connection)

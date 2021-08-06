@@ -6,7 +6,9 @@
   (:export #:create-swank-server
            #:swank-server
            #:swank-server-process
-           #:swank-server-port))
+           #:swank-server-host
+           #:swank-server-port
+           #:make-swank-server))
 (in-package #:mondo/swank/server)
 
 (defun port-available-p (port)
@@ -31,6 +33,7 @@
 
 (defstruct swank-server
   process
+  host
   port)
 
 (defun server-running-p (port)
@@ -40,8 +43,9 @@
     (usocket:connection-refused-error () nil)
     (usocket:connection-reset-error () nil)))
 
-(defun create-swank-server (&key lisp (port (random-port)))
-  (let ((lisp (or lisp "sbcl-bin")))
+(defun create-swank-server (&key lisp port)
+  (let ((lisp (or lisp "sbcl-bin"))
+        (port (or port (random-port))))
     (log :debug "Starting a swank server on ~A at port=~A" lisp port)
     (let ((process (handler-case
                        (uiop:launch-program
@@ -54,8 +58,9 @@
                        (uiop:quit -1)))))
       (prog1
           (make-swank-server :process process
+                             :host "127.0.0.1"
                              :port port)
-        (log :debug "Connecting to a swank server")
+        (log :debug "Waiting for the server to be ready")
         (loop repeat 300
               do (sleep 0.1)
               when (server-running-p port)
@@ -67,5 +72,5 @@
               (uiop:quit -1)
               finally
               (progn
-                (log :error "Failed to connect to a swank server")
+                (log :error "Took too long for the server to start. Timeout.")
                 (uiop:quit -1)))))))

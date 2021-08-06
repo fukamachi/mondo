@@ -29,7 +29,13 @@
   ((option :initarg :option))
   (:report (lambda (condition stream)
              (with-slots (option) condition
-               (format stream "Missing the value for the option of '~A'" option)))))
+               (format stream "The option '~A' requires a following argument" option)))))
+(define-condition invalid-option-value (mondo-cli-error)
+  ((option :initarg :option)
+   (value :initarg :value))
+  (:report (lambda (condition stream)
+             (with-slots (option value) condition
+               (format stream "Invalid value for the option '~A': ~A" option value)))))
 
 (defun command-line-arguments ()
   #+allegro (system:command-line-arguments)
@@ -67,6 +73,10 @@
 OPTIONS:
     -L [NAME], --lisp [NAME]
         Run the specific Lisp implementation (Default: sbcl-bin)
+    -h [NAME], --host [NAME]
+        Hostname of the running Swank server to connect to
+    -p [PORT], --port [PORT]
+        Port of the running Swank server to connect to
     --no-color
         Disable colors
     --version
@@ -80,6 +90,8 @@ OPTIONS:
 
 (defun parse-argv (argv)
   (loop with lisp = nil
+        with host = nil
+        with port = nil
         for option = (pop argv)
         while (and option
                    (starts-with "-" option))
@@ -88,6 +100,16 @@ OPTIONS:
               (unless argv
                 (error 'missing-option-value :option option))
               (setf lisp (pop argv)))
+             (("-h" "--host")
+              (unless argv
+                (error 'missing-option-value :option option))
+              (setf host (pop argv)))
+             (("-p" "--port")
+              (unless argv
+                (error 'missing-option-value :option option))
+              (unless (every #'digit-char-p (first argv))
+                (error 'invalid-option-value :option option :value (first argv)))
+              (setf port (parse-integer (pop argv))))
              ("--no-color" (setf *enable-colors* nil))
              ("--version" (print-version))
              ("--help" (print-usage))
@@ -95,7 +117,9 @@ OPTIONS:
              (otherwise
                (error 'unknown-option
                       :option option)))
-        finally (return (values `(:lisp ,lisp)
+        finally (return (values (append (when lisp `(:lisp ,lisp))
+                                        (when host `(:host ,host))
+                                        (when port `(:port ,port)))
                                 (if option
                                     (cons option argv)
                                     argv)))))
@@ -106,9 +130,7 @@ OPTIONS:
           (parse-argv argv)
         (when args
           (error 'extra-arguments :args args))
-        (destructuring-bind (&key lisp)
-            options
-          (run-repl :lisp lisp)))
+        (apply #'run-repl options))
     #+sbcl
     (sb-sys:interactive-interrupt ()
       (format *error-output* "~&Bye.~%")

@@ -20,6 +20,7 @@
                 #:function-at-point)
   (:import-from #:mondo/swank
                 #:create-swank-server
+                #:make-swank-server
                 #:connect-to-swank-server
                 #:initialize-swank-repl
                 #:swank-eval
@@ -121,7 +122,7 @@
 
 (defvar *previous-completions* nil)
 
-(defun run-repl (&key lisp)
+(defun run-repl (&key lisp host port)
   (bind-key "\\C-i" #'complete-or-indent)
   (bind-key "\\C-m" #'newline-or-continue)
   (bind-key "\\C-j" #'newline-or-continue)
@@ -146,7 +147,10 @@
                                        (print-prompt (prompt-string))
                                        (rl:on-new-line t))))))
 
-  (let* ((server (create-swank-server :lisp lisp))
+  (let* ((server (if (or host port)
+                     (make-swank-server :host (or host "127.0.0.1")
+                                        :port (or port 4005))
+                     (create-swank-server :lisp lisp :port port)))
          (*connection* (connect-to-swank-server server)))
     (initialize-swank-repl *connection*)
 
