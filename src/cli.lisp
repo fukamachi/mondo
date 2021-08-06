@@ -25,6 +25,11 @@
   (:report (lambda (condition stream)
              (with-slots (args) condition
                (format stream "Extra arguments: ~{~A~^ ~}" args)))))
+(define-condition missing-option-value (mondo-cli-error)
+  ((option :initarg :option))
+  (:report (lambda (condition stream)
+             (with-slots (option) condition
+               (format stream "Missing the value for the option of '~A'" option)))))
 
 (defun command-line-arguments ()
   #+allegro (system:command-line-arguments)
@@ -60,6 +65,8 @@
           "~&Usage: mondo [OPTIONS...]
 
 OPTIONS:
+    -L [NAME], --lisp [NAME]
+        Run the specific Lisp implementation (Default: sbcl-bin)
     --no-color
         Disable colors
     --version
@@ -72,10 +79,15 @@ OPTIONS:
   (uiop:quit))
 
 (defun parse-argv (argv)
-  (loop for option = (pop argv)
+  (loop with lisp = nil
+        for option = (pop argv)
         while (and option
                    (starts-with "-" option))
         do (case-equal option
+             (("-L" "--lisp")
+              (unless argv
+                (error 'missing-option-value :option option))
+              (setf lisp (pop argv)))
              ("--no-color" (setf *enable-colors* nil))
              ("--version" (print-version))
              ("--help" (print-usage))
@@ -83,7 +95,7 @@ OPTIONS:
              (otherwise
                (error 'unknown-option
                       :option option)))
-        finally (return (values '()
+        finally (return (values `(:lisp ,lisp)
                                 (if option
                                     (cons option argv)
                                     argv)))))
@@ -92,10 +104,11 @@ OPTIONS:
   (handler-case
       (multiple-value-bind (options args)
           (parse-argv argv)
-        (declare (ignore options))
         (when args
           (error 'extra-arguments :args args))
-        (run-repl))
+        (destructuring-bind (&key lisp)
+            options
+          (run-repl :lisp lisp)))
     #+sbcl
     (sb-sys:interactive-interrupt ()
       (format *error-output* "~&Bye.~%")

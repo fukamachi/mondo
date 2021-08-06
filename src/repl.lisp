@@ -121,7 +121,7 @@
 
 (defvar *previous-completions* nil)
 
-(defun run-repl ()
+(defun run-repl (&key lisp)
   (bind-key "\\C-i" #'complete-or-indent)
   (bind-key "\\C-m" #'newline-or-continue)
   (bind-key "\\C-j" #'newline-or-continue)
@@ -146,7 +146,7 @@
                                        (print-prompt (prompt-string))
                                        (rl:on-new-line t))))))
 
-  (let* ((server (create-swank-server))
+  (let* ((server (create-swank-server :lisp lisp))
          (*connection* (connect-to-swank-server server)))
     (initialize-swank-repl *connection*)
 

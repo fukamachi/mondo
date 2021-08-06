@@ -40,26 +40,32 @@
     (usocket:connection-refused-error () nil)
     (usocket:connection-reset-error () nil)))
 
-(defun create-swank-server (&key (port (random-port)))
-  (log :debug "Starting a swank server at port=~A" port)
-  (let ((process (handler-case
-                     (uiop:launch-program
-                       `("ros" "-s" "swank" "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")
-                       :input :stream
-                       :output nil
-                       :error t)
-                   (error (e)
-                     (log :error "Failed to start a swank server: ~A" e)
-                     (uiop:quit -1)))))
-    (prog1
-        (make-swank-server :process process
-                           :port port)
-      (log :debug "Connecting to a swank server")
-      (loop repeat 300
-            do (sleep 0.1)
-            when (server-running-p port)
-            do (return)
-            finally
-            (progn
-              (log :error "Failed to connect to a swank server")
-              (uiop:quit -1))))))
+(defun create-swank-server (&key lisp (port (random-port)))
+  (let ((lisp (or lisp "sbcl-bin")))
+    (log :debug "Starting a swank server on ~A at port=~A" lisp port)
+    (let ((process (handler-case
+                       (uiop:launch-program
+                         `("ros" "-L" ,lisp "-s" "swank" "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")
+                         :input :stream
+                         :output nil
+                         :error-output :stream)
+                     (error (e)
+                       (log :error "Failed to start a swank server: ~A" e)
+                       (uiop:quit -1)))))
+      (prog1
+          (make-swank-server :process process
+                             :port port)
+        (log :debug "Connecting to a swank server")
+        (loop repeat 300
+              do (sleep 0.1)
+              when (server-running-p port)
+              do (return)
+              unless (uiop:process-alive-p process)
+              do (log :error "Failed to start a swank server: ~A"
+                      (string-right-trim '(#\Newline #\Return)
+                                         (uiop:slurp-stream-string (uiop:process-info-error-output process))))
+              (uiop:quit -1)
+              finally
+              (progn
+                (log :error "Failed to connect to a swank server")
+                (uiop:quit -1)))))))
