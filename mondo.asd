@@ -3,6 +3,7 @@
   :version "0.1.0"
   :description "Common Lisp REPL interface"
   :author "Eitaro Fukamachi"
+  :license "GPL-3.0"
   :depends-on ("mondo/main")
   :pathname "src")
 
