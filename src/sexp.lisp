@@ -81,7 +81,12 @@
     (end-of-file () nil)))
 
 (defun start-at-point (input point)
-  (let ((start (min (1- (length input)) point))
+  (when (zerop (length input))
+    (return-from start-at-point nil))
+  (let ((point (if (<= (length input) point)
+                   (1- point)
+                   point))
+        (start (min (1- (length input)) point))
         (level 0))
     (loop for i from start downto 0
           for char = (aref input i)
@@ -95,24 +100,28 @@
                       (char/= #\\ (aref input (1- i)))))
           do (incf level)
           finally
-          (let ((atom-start-point
-                  (position-if #'space-char-p
-                               input
-                               :end point
-                               :from-end t)))
-            (return
-              (if atom-start-point
-                  (1+ atom-start-point)
-                  0))))))
+          (unless (space-char-p (aref input point))
+            (let ((atom-start-point
+                    (position-if #'space-char-p
+                                 input
+                                 :end point
+                                 :from-end t)))
+              (return
+                (when atom-start-point
+                  (1+ atom-start-point))))))))
 
 (defun function-at-point (input point)
   (let ((start-point (start-at-point input point)))
-    (subseq input (1+ start-point)
-            (position-if
-              (lambda (char)
-                (or (space-char-p char)
-                    (member char '(#\( #\) #\' #\` #\# #\"))))
-              input :start (1+ start-point)))))
+    (when start-point
+      (let ((func-start-point (if (char= (aref input start-point) #\()
+                                  (1+ start-point)
+                                  start-point)))
+        (subseq input func-start-point
+                (position-if
+                  (lambda (char)
+                    (or (space-char-p char)
+                        (member char '(#\( #\) #\' #\` #\# #\"))))
+                  input :start func-start-point))))))
 
 (defun indent-input (input prompt)
   (let* ((input (if prompt
