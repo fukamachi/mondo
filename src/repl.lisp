@@ -1,20 +1,14 @@
 (defpackage #:mondo/repl
   (:use #:cl
         #:mondo/utils)
-  (:shadowing-import-from #:mondo/logger
-                          #:log)
   (:import-from #:mondo/readline
                 #:print-prompt
-                #:readline
+                #:read-input
                 #:*line-buffer*
                 #:insert-text
                 #:replace-input
-                #:add-history
                 #:bind-key
                 #:complete)
-  (:import-from #:mondo/debugger
-                #:in-debugger-p
-                #:*debugger-level*)
   (:import-from #:mondo/sexp
                 #:input-complete-p
                 #:function-at-point)
@@ -22,39 +16,42 @@
                 #:create-swank-server
                 #:make-swank-server
                 #:connect-to-swank-server
-                #:initialize-swank-repl
+                #:wait-for-response-of-call
+                #:response
                 #:swank-eval
                 #:swank-complete
                 #:swank-arglist
-                #:swank-interrupt
-                #:invoke-debugger-restart
-                #:process-messages
-                #:debugger
-                #:debugger-restarts
-                #:debugger-level)
+                #:swank-interrupt)
+  (:import-from #:mondo/process
+                #:process-message)
+  (:import-from #:mondo/debugger
+                #:mondo-debugger
+                #:process-debugger-mode)
+  (:shadowing-import-from #:mondo/logger
+                          #:log)
   (:import-from #:mondo/color
                 #:color-text)
   (:import-from #:swank-protocol
                 #:connection-package
-                #:read-all-messages)
+                #:connection-request-count
+                #:connection-thread
+                #:request-swank-require
+                #:request-create-repl)
   (:export #:run-repl))
 (in-package #:mondo/repl)
 
 (defvar *connection*)
 
-(defun prompt-string ()
-  (format nil "~:[~A>~;debugger [~:*~A]~] "
-          (and (in-debugger-p)
-               *debugger-level*)
-          (connection-package *connection*)))
+(defun initialize-swank-repl (connection)
+  (unless (eql (connection-thread connection) 1)
+    (log :debug "Initializing Swank REPL")
+    (request-swank-require connection '(swank-repl))
+    (wait-for-response-of-call connection (connection-request-count connection))
+    (request-create-repl connection)))
 
-(defun read-input ()
-  (let* ((prompt-string (prompt-string))
-         (input (readline :prompt prompt-string)))
-    (when input
-      (unless (equal input "")
-        (add-history input))
-      input)))
+(defun prompt-string ()
+  (format nil "~A> "
+          (connection-package *connection*)))
 
 (defun complete-or-indent (&rest args)
   (declare (ignore args))
@@ -71,54 +68,34 @@
   (let ((func (function-at-point rl:*line-buffer* rl:*point*)))
     (if (or (string= text "")
             (not (equal text func)))
-        (let ((result (swank-arglist *connection* func)))
-          (when result
-            (list "" (color-text :gray result))))
-        (let ((results (swank-complete *connection* func)))
-          (cons text
-                (first results))))))
+        ;; TODO: Allow this to run asynchronously
+        (progn
+          (swank-arglist *connection* func)
+          (let ((call-id (connection-request-count *connection*)))
+            (wait-for-response-of-call *connection* call-id)
+            (let ((result (response *connection* call-id)))
+              (case (first result)
+                (:ok (list "" (color-text :gray (second result))))
+                (otherwise
+                 (log :error "Displaying arglist is failed")
+                 nil)))))
+        ;; TODO: Allow this to run asynchronously
+        (progn
+          (swank-complete *connection* func)
+          (let ((call-id (connection-request-count *connection*)))
+            (wait-for-response-of-call *connection* call-id)
+            (let ((result (response *connection* call-id)))
+              (case (first result)
+                (:ok (cons text (first (second result))))
+                (otherwise
+                 (log :error "Completion failed")
+                 nil))))))))
 
 (defun newline-or-continue (&rest args)
   (declare (ignore args))
   (if (input-complete-p rl:*line-buffer*)
       (setf rl:*done* 1)
       (insert-text (format nil "~%"))))
-
-(defun run-debugger-mode (connection initial-error)
-  (let ((current-error initial-error))
-    (labels ((request-restart (restart-num)
-               (invoke-debugger-restart connection
-                                        (debugger-level current-error)
-                                        restart-num)
-               (format t "~&~A~%" (color-text :red (process-messages connection)))
-               (when (in-debugger-p)
-                 (process-messages connection)))
-             (request-restart-by-name (restart-name)
-               (let ((num (position restart-name
-                                    (debugger-restarts current-error)
-                                    :key #'first
-                                    :test #'string=)))
-                 (if num
-                     (request-restart num)
-                     (log :warn "No restarts named '~A'" restart-name))))
-             (request-abort ()
-               (request-restart-by-name (if (eql *debugger-level* 1)
-                                            "*ABORT"
-                                            "ABORT"))))
-      (loop
-        (unless (in-debugger-p)
-          (return))
-        (handler-case
-            (let ((input (read-input)))
-              (if input
-                  (if (starts-with "restart" input)
-                      (request-restart (parse-integer (subseq input 7)))
-                      (swank-eval *connection* input))
-                  (request-abort)))
-          (debugger (e)
-            (setf current-error e)
-            ;; Ignore redundant :debug & :debug-activate messages
-            (read-all-messages connection)))))))
 
 (defvar *previous-completions* nil)
 
@@ -144,32 +121,38 @@
                                                       do (format t "~vA" item-size item))
                                              (format t "~%"))
                                        (fresh-line)
-                                       (print-prompt (prompt-string))
+                                       (print-prompt rl:+prompt+)
                                        (rl:on-new-line t))))))
 
   (let* ((server (if (or host port)
                      (make-swank-server :host (or host "127.0.0.1")
                                         :port (or port 4005))
                      (create-swank-server :lisp lisp :port port)))
-         (*connection* (connect-to-swank-server server)))
+         (*connection* (connect-to-swank-server server #'process-message)))
     (initialize-swank-repl *connection*)
 
     (loop
       (fresh-line)
-      (let ((input (read-input)))
+      (let ((input (read-input (prompt-string))))
         (setf *previous-completions* nil)
         (cond
           (input
            (fresh-line)
-           (handler-case (swank-eval *connection* input)
+           (handler-case (let ((call-id (swank-eval *connection* input)))
+                           (loop
+                             (handler-case
+                                 (progn
+                                   (wait-for-response-of-call *connection* call-id)
+                                   (destructuring-bind (status value)
+                                       (response *connection* call-id)
+                                     (when (eq status :abort)
+                                       (format t "~&~A~%" (color-text :red value))))
+                                   (return))
+                               (mondo-debugger (debugger)
+                                 (process-debugger-mode *connection* debugger)))))
              #+sbcl
              (sb-sys:interactive-interrupt ()
-               (handler-case
-                   (swank-interrupt *connection*)
-                 (debugger (e)
-                   (run-debugger-mode *connection* e))))
-             (debugger (e)
-               (run-debugger-mode *connection* e))))
+               (swank-interrupt *connection*))))
           (t
            (format t "~&Bye.~%")
            (return)))))))

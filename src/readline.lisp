@@ -7,6 +7,7 @@
                 #:insert-text)
   (:import-from #:cffi)
   (:export #:readline
+           #:read-input
            #:print-prompt
            #:add-history
            #:bind-key
@@ -41,3 +42,10 @@
 (defun replace-input (new-input)
   (rl:replace-line "" t)
   (rl:insert-text new-input))
+
+(defun read-input (prompt-string)
+  (let ((input (readline :prompt prompt-string)))
+    (when input
+      (unless (equal input "")
+        (add-history input))
+      input)))
