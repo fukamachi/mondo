@@ -8,13 +8,11 @@
                 #:exit-debugger)
   (:import-from #:mondo/swank/client
                 #:wait-for-response-of-call
-                #:connection-debug-activated)
+                #:response)
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/utils
                 #:starts-with)
-  (:import-from #:swank-protocol
-                #:message-waiting-p)
   (:export #:process-debugger-mode
            #:mondo-debugger
            #:invoke-mondo-debugger
@@ -64,17 +62,17 @@
                                "ABORT")))
 
 (defun process-debugger-mode (connection error)
-  (let ((level (debugger-level error)))
-    (loop
-      (with-slots (condition restarts frames) error
-        (print-error-information condition restarts frames))
-      (handler-case
-          (handler-bind ((mondo-debugger
-                           (lambda (debugger)
-                             (unless (< level (debugger-level debugger))
-                               (let ((restart (find-restart 'ignore debugger)))
-                                 (when restart
-                                   (invoke-restart restart)))))))
+  (handler-case
+      (let ((level (debugger-level error)))
+        (with-slots (condition restarts frames) error
+          (print-error-information condition restarts frames))
+        (handler-bind ((mondo-debugger
+                         (lambda (debugger)
+                           (unless (< level (debugger-level debugger))
+                             (let ((restart (find-restart 'ignore debugger)))
+                               (when restart
+                                 (invoke-restart restart)))))))
+          (loop
             (let* ((input (read-input (debug-prompt level)))
                    (call-id
                      (if input
@@ -87,17 +85,18 @@
                          (request-abort connection error))))
               (when call-id
                 (wait-for-response-of-call connection
-                                           call-id))
-              (loop while (message-waiting-p connection) do (sleep 0.05))
-              (when (< (or (connection-debug-activated connection) 0) level)
-                (return))))
-        (mondo-debugger (debugger)
-          (process-debugger-mode connection debugger))
-        #+sbcl
-        (sb-sys:interactive-interrupt ()
-          (let ((call-id (exit-debugger connection)))
-            (wait-for-response-of-call connection call-id))
-          (return))))))
+                                           call-id)
+                (destructuring-bind (status value)
+                    (response connection call-id)
+                  (declare (ignore value))
+                  (when (eq status :abort)
+                    (return))))))))
+    (mondo-debugger (debugger)
+      (process-debugger-mode connection debugger))
+    #+sbcl
+    (sb-sys:interactive-interrupt ()
+      (let ((call-id (exit-debugger connection)))
+        (wait-for-response-of-call connection call-id)))))
 
 (defun invoke-mondo-debugger (connection debugger-error)
   (restart-case

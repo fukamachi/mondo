@@ -16,6 +16,7 @@
                 #:create-swank-server
                 #:make-swank-server
                 #:connect-to-swank-server
+                #:start-processing
                 #:wait-for-response-of-call
                 #:response
                 #:swank-eval
@@ -23,7 +24,7 @@
                 #:swank-arglist
                 #:swank-interrupt)
   (:import-from #:mondo/process
-                #:process-message)
+                #:make-process-message-function)
   (:import-from #:mondo/debugger
                 #:mondo-debugger
                 #:process-debugger-mode)
@@ -128,7 +129,8 @@
                      (make-swank-server :host (or host "127.0.0.1")
                                         :port (or port 4005))
                      (create-swank-server :lisp lisp :port port)))
-         (*connection* (connect-to-swank-server server #'process-message)))
+         (*connection* (connect-to-swank-server server)))
+    (start-processing *connection* (make-process-message-function *connection*))
     (initialize-swank-repl *connection*)
 
     (loop
