@@ -5,12 +5,10 @@
                 #:print-prompt
                 #:read-input
                 #:*line-buffer*
-                #:insert-text
-                #:replace-input
-                #:bind-key
-                #:complete)
+                #:defkeymap
+                #:use-keymap
+                #:default)
   (:import-from #:mondo/sexp
-                #:input-complete-p
                 #:function-at-point)
   (:import-from #:mondo/swank
                 #:connection-prompt
@@ -74,16 +72,6 @@
   (format nil "~A> "
           (connection-prompt *connection*)))
 
-(defun complete-or-indent (&rest args)
-  (declare (ignore args))
-  (if (find #\Newline rl:*line-buffer*)
-      (let ((new-input (mondo/sexp:indent-input rl:*line-buffer* (prompt-string))))
-        (if (equal rl:*line-buffer* new-input)
-            (complete)
-            (replace-input new-input)))
-      (complete))
-  (values))
-
 (defun symbol-complete (text start end)
   (declare (ignore start end))
   (let ((func (function-at-point rl:*line-buffer* rl:*point*)))
@@ -112,18 +100,10 @@
                  (log :error "Completion failed")
                  nil))))))))
 
-(defun newline-or-continue (&rest args)
-  (declare (ignore args))
-  (if (input-complete-p rl:*line-buffer*)
-      (setf rl:*done* 1)
-      (insert-text (format nil "~%"))))
-
 (defvar *previous-completions* nil)
 
 (defun run-repl (&key lisp host port)
-  (bind-key "\\C-i" #'complete-or-indent)
-  (bind-key "\\C-m" #'newline-or-continue)
-  (bind-key "\\C-j" #'newline-or-continue)
+  (use-keymap 'default)
   (rl:register-function :complete #'symbol-complete)
   (rl:register-hook :lsmatches (lambda (completions count longest-length)
                                  (unless (equalp (rest completions) *previous-completions*)
