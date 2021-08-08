@@ -13,12 +13,14 @@
                 #:input-complete-p
                 #:function-at-point)
   (:import-from #:mondo/swank
+                #:connection-prompt
                 #:create-swank-server
                 #:make-swank-server
                 #:connect-to-swank-server
                 #:start-processing
                 #:wait-for-response-of-call
                 #:response
+                #:swank-rex
                 #:swank-eval
                 #:swank-complete
                 #:swank-arglist
@@ -34,6 +36,8 @@
                 #:color-text)
   (:import-from #:swank-protocol
                 #:connection-package
+                #:connection-hostname
+                #:connection-port
                 #:connection-request-count
                 #:connection-thread
                 #:request-swank-require
@@ -46,13 +50,29 @@
 (defun initialize-swank-repl (connection)
   (unless (eql (connection-thread connection) 1)
     (log :debug "Initializing Swank REPL")
-    (request-swank-require connection '(swank-repl))
-    (wait-for-response-of-call connection (connection-request-count connection))
-    (request-create-repl connection)))
+    (let ((call-id (swank-rex connection '(swank:connection-info))))
+      (request-swank-require connection '(swank-repl))
+      (wait-for-response-of-call connection (connection-request-count connection))
+      (request-create-repl connection)
+      (destructuring-bind (&optional status connection-info)
+          (response connection call-id)
+        (when (eq status :ok)
+          (destructuring-bind (&key pid lisp-implementation package &allow-other-keys)
+              connection-info
+            (format t "~&~A ~A running at ~A:~A (pid=~A)~%"
+                    (getf lisp-implementation :type)
+                    (getf lisp-implementation :version)
+                    (connection-hostname connection)
+                    (connection-port connection)
+                    pid)
+            (destructuring-bind (&key name prompt)
+                package
+              (setf (connection-package connection) name
+                    (connection-prompt connection) prompt))))))))
 
 (defun prompt-string ()
   (format nil "~A> "
-          (connection-package *connection*)))
+          (connection-prompt *connection*)))
 
 (defun complete-or-indent (&rest args)
   (declare (ignore args))

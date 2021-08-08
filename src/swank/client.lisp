@@ -10,7 +10,6 @@
                           #:+debug+)
   (:import-from #:swank-protocol
                 #:connection
-                #:connection-package
                 #:connect
                 #:read-message)
   (:import-from #:bordeaux-threads)
@@ -18,13 +17,16 @@
            #:start-processing
            #:response
            #:mondo-connection
+           #:connection-prompt
            #:wait-for-response
            #:wait-for-response-of-call
            #:notify-message))
 (in-package #:mondo/swank/client)
 
 (defclass mondo-connection (swank-protocol:connection)
-  ((process-thread :initform nil
+  ((prompt :initform nil
+           :accessor connection-prompt)
+   (process-thread :initform nil
                    :accessor connection-process-thread)
    (response-map :initform (make-hash-table :test 'eql))
    (response-lock :initform (bt:make-lock "mondo response lock"))
@@ -88,7 +90,6 @@
                               :hostname host
                               :port port
                               :logp (eql *log-level* +debug+))))
-    (setf (connection-package conn) "CL-USER")
     (log :debug "Connecting to the swank server on ~A:~A" host port)
     (handler-case
         (connect conn)

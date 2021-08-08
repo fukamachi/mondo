@@ -1,6 +1,7 @@
 (defpackage #:mondo/process
   (:use #:cl)
   (:import-from #:mondo/swank/client
+                #:connection-prompt
                 #:response
                 #:notify-message)
   (:import-from #:mondo/swank/protocol
@@ -33,8 +34,8 @@
                (fresh-line))
              (write-string output)))
           (:new-package
-           (setf (connection-package connection)
-                 (find-shortest-nickname body)))
+           (setf (connection-package connection) (first body)
+                 (connection-prompt connection) (find-shortest-nickname body)))
           ((:new-features :indentation-update))
           (:return
            (destructuring-bind (value call-id)
