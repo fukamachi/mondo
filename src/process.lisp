@@ -32,7 +32,8 @@
                body
              (when (eq target :repl-result)
                (fresh-line))
-             (write-string output)))
+             (write-string output)
+             (force-output)))
           (:new-package
            (setf (connection-package connection) (first body)
                  (connection-prompt connection) (find-shortest-nickname body)))

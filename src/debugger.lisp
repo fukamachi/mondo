@@ -15,7 +15,8 @@
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/utils
-                #:starts-with)
+                #:integer-string-p
+                #:string-space-trim)
   (:export #:process-debugger-mode
            #:mondo-debugger
            #:invoke-mondo-debugger
@@ -44,23 +45,30 @@
         do (format t "~&  ~D: [~A] ~A~%" i name description))
   (format t "~2&  Ctrl-t: show backtraces~%"))
 
-(defun invoke-restarts-by-name (connection error name)
+(defun invoke-swank-restart (connection error num)
+  (with-slots (restarts) error
+    (unless (<= 0 num (1- (length restarts)))
+      (log :warn "Invalid restart number: ~A" num)
+      (return-from invoke-swank-restart))
+    (invoke-debugger-restart connection
+                             (debugger-level error)
+                             num)))
+
+(defun invoke-swank-restart-by-name (connection error name)
   (with-slots (restarts) error
     (let ((restart-num (position name restarts :key #'first :test #'string=)))
       (if restart-num
-          (invoke-debugger-restart connection
-                                   (debugger-level error)
-                                   restart-num)
+          (invoke-swank-restart connection error restart-num)
           (progn
             (log :warn "No restarts named '~A'" name)
             nil)))))
 
 (defun request-abort (connection error)
-  (invoke-restarts-by-name connection
-                           error
-                           (if (eql (debugger-level error) 1)
-                               "*ABORT"
-                               "ABORT")))
+  (invoke-swank-restart-by-name connection
+                                error
+                                (if (eql (debugger-level error) 1)
+                                    "*ABORT"
+                                    "ABORT")))
 
 (defvar *current-error*)
 
@@ -96,14 +104,20 @@
                                      (invoke-restart restart)))))))
               (loop
                 (let* ((input (read-input (debug-prompt level)))
+                       (input (and input
+                                   (string-space-trim input)))
                        (call-id
                          (if input
-                             (if (starts-with "restart" input)
-                                 (invoke-debugger-restart connection
-                                                          level
-                                                          ;; TODO: Check if the input is an integer
-                                                          (parse-integer (subseq input 7)))
-                                 (swank-eval connection input))
+                             (cond
+                               ((integer-string-p input)
+                                (invoke-swank-restart connection
+                                                      error
+                                                      (parse-integer input)))
+                               ((or (string= input "a")
+                                    (string= input "abort"))
+                                (request-abort connection error))
+                               (t
+                                (swank-eval connection input)))
                              (request-abort connection error))))
                   (when call-id
                     (wait-for-response-of-call connection

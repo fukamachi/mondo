@@ -1,6 +1,5 @@
 (defpackage #:mondo/repl
-  (:use #:cl
-        #:mondo/utils)
+  (:use #:cl)
   (:import-from #:mondo/readline
                 #:print-prompt
                 #:read-input
