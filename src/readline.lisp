@@ -3,8 +3,9 @@
   (:import-from #:mondo/color
                 #:color-text)
   (:import-from #:mondo/sexp
-                #:input-complete-p
                 #:indent-input)
+  (:import-from #:mondo/sexp-parse
+                #:input-complete-p)
   (:import-from #:cl-readline
                 #:*line-buffer*
                 #:insert-text)
