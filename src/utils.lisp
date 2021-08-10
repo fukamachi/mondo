@@ -2,6 +2,7 @@
   (:use #:cl)
   (:export #:find-shortest-nickname
            #:space-char-p
+           #:*space-chars*
            #:string-space-trim
            #:integer-string-p
            #:starts-with))

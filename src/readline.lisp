@@ -2,10 +2,11 @@
   (:use #:cl)
   (:import-from #:mondo/color
                 #:color-text)
-  (:import-from #:mondo/sexp
+  (:import-from #:mondo/sexp/indent
                 #:indent-input)
-  (:import-from #:mondo/sexp-parse
-                #:input-complete-p)
+  (:import-from #:mondo/sexp/parse
+                #:input-complete-p
+                #:function-at-point)
   (:import-from #:cl-readline
                 #:*line-buffer*
                 #:insert-text)
@@ -74,6 +75,9 @@
          (rl:set-keymap ,before)))))
 
 (defun complete ()
+  (let ((func (function-at-point rl:*line-buffer* rl:*point*)))
+    (unless func
+      (return-from complete)))
   (cffi:foreign-funcall "rl_complete" :int 9 :int 0)
   (cffi:foreign-funcall "rl_possible_completions" :int 1 :int 0))
 
@@ -97,7 +101,7 @@
 (defun complete-or-indent (&rest args)
   (declare (ignore args))
   (if (find #\Newline rl:*line-buffer*)
-      (let ((new-input (indent-input rl:*line-buffer* rl:+prompt+)))
+      (let ((new-input (indent-input rl:*line-buffer* rl:*point* (length rl:+prompt+))))
         (if (equal rl:*line-buffer* new-input)
             (complete)
             (replace-input new-input)))

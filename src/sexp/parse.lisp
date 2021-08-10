@@ -1,14 +1,19 @@
-(defpackage #:mondo/sexp-parse
+(defpackage #:mondo/sexp/parse
   (:use #:cl)
   (:import-from #:mondo/utils
-                #:space-char-p)
-  (:export #:input-complete-p))
-(in-package #:mondo/sexp-parse)
+                #:space-char-p
+                #:*space-chars*)
+  (:export #:parse
+           #:input-complete-p
+           #:function-at-point))
+(in-package #:mondo/sexp/parse)
 
 (defvar *context* nil)
 
 (defstruct context
   function-name
+  func-base-point
+  arg-base-point
   (skipped-count 0)
   inner-context)
 
@@ -18,11 +23,29 @@
 (defun (setf function-name) (new-value)
   (setf (context-function-name *context*) new-value))
 
+(defun func-base-point ()
+  (context-func-base-point *context*))
+
+(defun (setf func-base-point) (new-value)
+  (setf (context-func-base-point *context*) new-value))
+
+(defun arg-base-point ()
+  (context-arg-base-point *context*))
+
+(defun (setf arg-base-point) (new-value)
+  (setf (context-arg-base-point *context*) new-value))
+
 (defun skipped-count ()
   (context-skipped-count *context*))
 
 (defun (setf skipped-count) (new-value)
   (setf (context-skipped-count *context*) new-value))
+
+(defun inner-context ()
+  (context-inner-context *context*))
+
+(defun (setf inner-context) (new-value)
+  (setf (context-inner-context *context*) new-value))
 
 (defmacro with-context (&body body)
   (let ((outer-context (gensym "OUTER-CONTEXT")))
@@ -30,16 +53,28 @@
            (*context* (make-context)))
        (when ,outer-context
          (setf (context-inner-context ,outer-context) *context*))
-       ,@body)))
+       (values (handler-case (progn ,@body)
+                 (incomplete-form (e)
+                   (incomplete-form (slot-value e 'type))))
+               *context*))))
+
+(defun context-last-inner-context (context)
+  (loop for inner-context = (context-inner-context context)
+        if (not inner-context)
+        do (return context)
+        else do (setf context inner-context)))
 
 (defstruct (buffer
-             (:constructor make-buffer (input &aux (end (length input)))))
+             (:constructor make-buffer (input &key end
+                                              &aux (end (or end (length input))))))
   input
+  (line 0)
   (point 0)
   end)
 
 (define-condition incomplete-form ()
-  ((type :initarg :type)))
+  ((type :initarg :type)
+   (context :initform *context*)))
 
 (defun incomplete-form (type)
   (error 'incomplete-form :type type))
@@ -146,10 +181,26 @@
               (skip-block-comment buffer))
              ((char= char #\;)
               (skip-inline-comment buffer))
+             ((char= char #\Return)
+              (incf (buffer-line buffer))
+              (or (forward-char buffer)
+                  (return))
+              (when (char= (current-char buffer) #\Newline)
+                (forward-char buffer)))
+             ((char= char #\Newline)
+              (incf (buffer-line buffer))
+              (forward-char buffer))
              ((space-char-p char)
               (forward-char buffer))
              (t
               (return)))))
+
+(defun skip-unmatched-closed-parens (buffer)
+  (loop until (buffer-end-p buffer)
+        for char = (current-char buffer)
+        do (case char
+             (#\) (forward-char buffer))
+             (otherwise (return)))))
 
 (declaim (ftype (function (t) t) read-form))
 
@@ -190,44 +241,76 @@
                 do (case char
                      ((#\" #\( #\) #\' #\` #\,)
                       (return))
+                     (#.*space-chars* (return))
                      (#\| (skip-quoted-symbol buffer))
                      (#\\ (skip-next-char buffer :type 'symbol))
-                     (otherwise (forward-char buffer)))))))))
+                     (otherwise
+                       (forward-char buffer)))))))))
 
 (defun read-list (buffer)
   (assert (char= (current-char buffer) #\())
-  (forward-char buffer)
-  (skip-spaces buffer)
-  (when (buffer-end-p buffer)
-    (incomplete-form 'list))
-  (loop until (buffer-end-p buffer)
-        for char = (current-char buffer)
-        do (case char
-             (#\) (forward-char buffer)
+  (with-context
+    (forward-char buffer)
+    (skip-spaces buffer)
+    (when (buffer-end-p buffer)
+      (incomplete-form 'list))
+    (let ((start (buffer-point buffer))
+          (line (buffer-line buffer)))
+      (setf (func-base-point) (1- start))
+      (loop with initial = t
+            until (buffer-end-p buffer)
+            for char = (current-char buffer)
+            do (case char
+                 (#\)
+                  (forward-char buffer)
                   (return))
-             (#\( (read-list buffer))
-             (otherwise
-               (read-atom buffer)))
-           (skip-spaces buffer)
-        finally
-        (incomplete-form 'list)))
+                 (#\(
+                  (when (or (/= line (buffer-line buffer))
+                            (null (arg-base-point)))
+                    (setf line (buffer-line buffer))
+                    (setf (arg-base-point) (buffer-point buffer)))
+                  (read-list buffer)
+                  (setf (inner-context) nil)
+                  (incf (skipped-count)))
+                 (otherwise
+                  (when (and (not initial)
+                             (or (/= line (buffer-line buffer))
+                                 (null (arg-base-point))))
+                    (setf line (buffer-line buffer))
+                    (setf (arg-base-point) (buffer-point buffer)))
+                  (read-atom buffer)
+                  (if initial
+                      (with-slots (input point) buffer
+                        (setf (function-name) (subseq input start point)))
+                      (incf (skipped-count)))))
+               (setf initial nil)
+               (skip-spaces buffer)
+            finally
+            (incomplete-form 'list)))))
 
 (defun read-form (buffer)
-  (block nil
-    (when (buffer-end-p buffer)
-      (return))
-    (let ((char (current-char buffer)))
-      (case char
-        (#\( (read-list buffer))
-        (otherwise (read-atom buffer))))))
+  (unless (buffer-end-p buffer)
+    (case (current-char buffer)
+      (#\( (read-list buffer))
+      (otherwise (read-atom buffer)))))
 
-(defun input-complete-p (input)
-  (let ((buffer (make-buffer input)))
+(defun parse (input &key end)
+  (let ((buffer (make-buffer input :end end)))
     (skip-spaces buffer)
     (handler-case
         (loop until (buffer-end-p buffer)
               do (read-form buffer)
                  (skip-spaces buffer)
-              finally (return t))
-      (incomplete-form ()
-        nil))))
+                 (skip-unmatched-closed-parens buffer)
+              finally (return nil))
+      (incomplete-form (e)
+        (slot-value e 'context)))))
+
+(defun input-complete-p (input)
+  (not (parse input)))
+
+(defun function-at-point (input point)
+  (let ((context (parse input :end point)))
+    (when context
+      (context-function-name
+        (context-last-inner-context context)))))

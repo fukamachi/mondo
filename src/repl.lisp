@@ -7,7 +7,7 @@
                 #:defkeymap
                 #:use-keymap
                 #:default)
-  (:import-from #:mondo/sexp
+  (:import-from #:mondo/sexp/parse
                 #:function-at-point)
   (:import-from #:mondo/swank
                 #:connection-prompt
