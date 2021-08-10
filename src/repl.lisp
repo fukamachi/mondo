@@ -148,7 +148,7 @@
                                        (destructuring-bind (status value)
                                            (response *connection* call-id)
                                          (when (eq status :abort)
-                                           (format t "~&~A~%" (color-text :red value))))
+                                           (format t "~&;; Aborted on ~A~%" value)))
                                        (return))
                                    (mondo-debugger (debugger)
                                      (process-debugger-mode *connection* debugger)))))
