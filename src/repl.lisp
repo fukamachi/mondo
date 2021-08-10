@@ -134,26 +134,29 @@
 
     (loop
       (fresh-line)
-      (let ((input (read-input (prompt-string))))
-        (setf *previous-completions* nil)
-        (cond
-          (input
-           (fresh-line)
-           (handler-case (let ((call-id (swank-eval *connection* input)))
-                           (loop
-                             (handler-case
-                                 (progn
-                                   (wait-for-response-of-call *connection* call-id)
-                                   (destructuring-bind (status value)
-                                       (response *connection* call-id)
-                                     (when (eq status :abort)
-                                       (format t "~&~A~%" (color-text :red value))))
-                                   (return))
-                               (mondo-debugger (debugger)
-                                 (process-debugger-mode *connection* debugger)))))
-             #+sbcl
-             (sb-sys:interactive-interrupt ()
-               (swank-interrupt *connection*))))
-          (t
-           (format t "~&Bye.~%")
-           (return)))))))
+      (handler-case
+          (let ((input (read-input (prompt-string))))
+            (setf *previous-completions* nil)
+            (cond
+              (input
+               (fresh-line)
+               (handler-case (let ((call-id (swank-eval *connection* input)))
+                               (loop
+                                 (handler-case
+                                     (progn
+                                       (wait-for-response-of-call *connection* call-id)
+                                       (destructuring-bind (status value)
+                                           (response *connection* call-id)
+                                         (when (eq status :abort)
+                                           (format t "~&~A~%" (color-text :red value))))
+                                       (return))
+                                   (mondo-debugger (debugger)
+                                     (process-debugger-mode *connection* debugger)))))
+                 #+sbcl
+                 (sb-sys:interactive-interrupt ()
+                   (swank-interrupt *connection*))))
+              (t
+               (format t "~&Bye.~%")
+               (return))))
+        (mondo-debugger (debugger)
+          (process-debugger-mode *connection* debugger))))))
