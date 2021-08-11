@@ -92,9 +92,13 @@
           (swank-complete *connection* func)
           (let ((call-id (connection-request-count *connection*)))
             (wait-for-response-of-call *connection* call-id)
-            (let ((result (response *connection* call-id)))
-              (case (first result)
-                (:ok (cons text (first (second result))))
+            (destructuring-bind (status result)
+                (response *connection* call-id)
+              (case status
+                (:ok
+                 (destructuring-bind (candidates &optional common)
+                     result
+                   (cons common candidates)))
                 (otherwise
                  (log :error "Completion failed")
                  nil))))))))
