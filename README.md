@@ -1,11 +1,19 @@
 # mondo
 
-Simple Common Lisp REPL just like SLIME REPL but on terminal.
+This is a simple Common Lisp REPL, just like SLIME REPL that works on terminal.  
+It's not intended to achieve the same behavior, but it aims to provide its functionality outside of Emacs.
 
 ## Prequisite
 
 * [Roswell](https://github.com/roswell/roswell)
 * [GNU Readline](https://tiswww.case.edu/php/chet/readline/rltop.html)
+
+## Features
+
+* Complete function/macro names
+* Show an argument list
+* Run a Lisp implementation by name and version
+* Connect to a running Swank server
 
 ## Installation
 
@@ -37,11 +45,6 @@ OPTIONS:
     --debug
         Print debug logs
 ```
-
-## Related work
-
-* [CL-REPL](https://github.com/koji-kojiro/cl-repl)
-  * More feature-rich, like highlighting, colorized output and shell-command execution
 
 ## License
 
