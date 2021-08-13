@@ -6,33 +6,25 @@
                 #:defkeymap
                 #:with-keymap)
   (:import-from #:mondo/swank/protocol
-                #:invoke-debugger-restart
+                #:swank-invoke-nth-restart
+                #:debug-activate
+                #:debug-activate-thread
+                #:debug-activate-restarts
+                #:debug-activate-level
+                #:debug-activate-condition
+                #:debug-return
+                #:debug-return-level
+                #:ignore-event
                 #:swank-eval
-                #:exit-debugger)
-  (:import-from #:mondo/swank/client
-                #:wait-for-response-of-call
-                #:response)
+                #:swank-throw-to-toplevel)
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/utils
                 #:integer-string-p
                 #:string-space-trim)
   (:export #:process-debugger-mode
-           #:mondo-debugger
-           #:invoke-mondo-debugger
-           #:debugger-level
            #:print-error-information))
 (in-package #:mondo/debugger)
-
-(define-condition mondo-debugger ()
-  ((level :initarg :level
-          :reader debugger-level)
-   (condition :initarg :condition
-              :reader debugger-condition)
-   (restarts :initarg :restarts
-             :reader debugger-restarts)
-   (frames :initarg :frames
-           :reader debugger-frames)))
 
 (defun debug-prompt (level)
   (format nil "debugger [~A] " level))
@@ -45,36 +37,37 @@
         do (format t "~&  ~D: [~A] ~A~%" i name description))
   (format t "~2&  Ctrl-t: show backtraces~%"))
 
-(defun invoke-swank-restart (connection error num)
-  (with-slots (restarts) error
+(defun swank-invoke-restart (event num connection)
+  (let ((restarts (debug-activate-restarts event)))
     (unless (<= 0 num (1- (length restarts)))
       (log :warn "Invalid restart number: ~A" num)
-      (return-from invoke-swank-restart))
-    (invoke-debugger-restart connection
-                             (debugger-level error)
-                             num)))
+      (return-from swank-invoke-restart))
+    (swank-invoke-nth-restart (debug-activate-thread event)
+                              (debug-activate-level event)
+                              num
+                              connection)))
 
-(defun invoke-swank-restart-by-name (connection error name)
-  (with-slots (restarts) error
+(defun swank-invoke-restart-by-name (event name connection)
+  (let ((restarts (debug-activate-restarts event)))
     (let ((restart-num (position name restarts :key #'first :test #'string=)))
       (if restart-num
-          (invoke-swank-restart connection error restart-num)
+          (swank-invoke-restart event restart-num connection)
           (progn
             (log :warn "No restarts named '~A'" name)
             nil)))))
 
-(defun request-abort (connection error)
-  (invoke-swank-restart-by-name connection
-                                error
-                                (if (eql (debugger-level error) 1)
+(defun swank-debugger-abort (event connection)
+  (swank-invoke-restart-by-name event
+                                (if (eql (debug-activate-level event) 1)
                                     "*ABORT"
-                                    "ABORT")))
+                                    "ABORT")
+                                connection))
 
-(defvar *current-error*)
+(defvar *current-event*)
 
 (defun show-backtrace (&rest args)
   (declare (ignore args))
-  (with-slots (condition frames) *current-error*
+  (with-slots (condition frames) *current-event*
     (uiop:run-program
       (format nil "echo ~S | less"
               (with-output-to-string (*standard-output*)
@@ -89,55 +82,45 @@
 (defkeymap (debugger :base default)
   ("\\C-t" #'show-backtrace))
 
-(defun process-debugger-mode (connection error)
+(defun process-debugger-mode (connection event)
   (with-keymap (debugger)
-    (let ((*current-error* error))
+    (let ((*current-event* event))
       (handler-case
-          (let ((level (debugger-level error)))
-            (with-slots (condition restarts) error
-              (print-error-information condition restarts))
-            (handler-bind ((mondo-debugger
-                             (lambda (debugger)
-                               (unless (< level (debugger-level debugger))
-                                 (let ((restart (find-restart 'ignore debugger)))
-                                   (when restart
-                                     (invoke-restart restart)))))))
+          (let ((level (debug-activate-level event))
+                (condition (debug-activate-condition event))
+                (restarts (debug-activate-restarts event)))
+            (print-error-information condition restarts)
+            (handler-bind ((debug-activate
+                             (lambda (event)
+                               (unless (< level (debug-activate-level event))
+                                 (funcall #'ignore-event event))))
+                           (debug-return
+                             (lambda (event)
+                               (when (= level (debug-return-level event))
+                                 (return-from process-debugger-mode)))))
               (loop
                 (let* ((input (read-input (debug-prompt level)))
                        (input (and input
-                                   (string-space-trim input)))
-                       (call-id
-                         (if input
-                             (cond
-                               ((integer-string-p input)
-                                (invoke-swank-restart connection
-                                                      error
-                                                      (parse-integer input)))
-                               ((or (string= input "a")
-                                    (string= input "abort"))
-                                (request-abort connection error))
-                               (t
-                                (swank-eval connection input)))
-                             (request-abort connection error))))
-                  (when call-id
-                    (wait-for-response-of-call connection
-                                               call-id)
-                    (destructuring-bind (status value)
-                        (response connection call-id)
-                      (declare (ignore value))
-                      (when (eq status :abort)
-                        (return))))))))
-        (mondo-debugger (debugger)
-          (process-debugger-mode connection debugger))
+                                   (string-space-trim input))))
+                  (multiple-value-bind (result success)
+                      (if input
+                          (cond
+                            ((integer-string-p input)
+                             (swank-invoke-restart event
+                                                   (parse-integer input)
+                                                   connection))
+                            ((or (string= input "a")
+                                 (string= input "abort"))
+                             (swank-debugger-abort event connection))
+                            (t
+                             (swank-eval `(swank-repl:listener-eval ,input) connection
+                                         :thread (debug-activate-thread event))))
+                          (swank-debugger-abort event connection))
+                    (declare (ignore result))
+                    (unless success  ;; when aborted
+                      (return)))))))
+        (debug-activate (event)
+          (process-debugger-mode connection event))
         #+sbcl
         (sb-sys:interactive-interrupt ()
-          (let ((call-id (exit-debugger connection)))
-            (wait-for-response-of-call connection call-id)))))))
-
-(defun invoke-mondo-debugger (connection debugger-error)
-  (restart-case
-      (error debugger-error)
-    (start-debugger-mode ()
-      (process-debugger-mode connection debugger-error))
-    (ignore ()
-      nil)))
+          (swank-throw-to-toplevel (debug-activate-thread event) connection))))))

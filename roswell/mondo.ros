@@ -6,8 +6,11 @@ exec ros -Q -- $0 "$@"
 (progn ;;init forms
   (ros:ensure-asdf)
   (let ((*error-output* (make-broadcast-stream)))
-    (ql:quickload '(#:swank-protocol
-                    #:cl-readline) :silent t))
+    (ql:quickload '(#:swank
+                    #:cl-readline
+                    #:usocket
+                    #:alexandria
+                    #-(or sbcl allegro ccl clisp) #:babel) :silent t))
   (ql:quickload '(#:mondo/cli) :silent t))
 
 (defpackage :ros.script.mondo

@@ -10,98 +10,81 @@
   (:import-from #:mondo/sexp/parse
                 #:function-at-point)
   (:import-from #:mondo/swank
-                #:connection-prompt
+                #:connection-package
+                #:connection-host
+                #:connection-port
                 #:create-swank-server
                 #:make-swank-server
                 #:connect-to-swank-server
                 #:start-processing
-                #:wait-for-response-of-call
-                #:response
-                #:swank-rex
-                #:swank-eval
+                #:swank-require
+                #:swank-create-repl
+                #:swank-connection-info
+                #:swank-listener-eval
                 #:swank-complete
                 #:swank-arglist
-                #:swank-interrupt)
-  (:import-from #:mondo/process
-                #:make-process-message-function)
+                #:swank-interrupt
+                #:debug-activate
+                #:debug-return
+                #:ignore-event)
   (:import-from #:mondo/debugger
-                #:mondo-debugger
                 #:process-debugger-mode)
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/color
                 #:color-text)
-  (:import-from #:swank-protocol
-                #:connection-package
-                #:connection-hostname
-                #:connection-port
-                #:connection-request-count
-                #:connection-thread
-                #:request-swank-require
-                #:request-create-repl)
+  (:import-from #:bordeaux-threads)
   (:export #:run-repl))
 (in-package #:mondo/repl)
 
 (defvar *connection*)
 
 (defun initialize-swank-repl (connection)
-  (unless (eql (connection-thread connection) 1)
-    (log :debug "Initializing Swank REPL")
-    (let ((call-id (swank-rex connection '(swank:connection-info))))
-      (request-swank-require connection '(swank-repl))
-      (wait-for-response-of-call connection (connection-request-count connection))
-      (request-create-repl connection)
-      (destructuring-bind (&optional status connection-info)
-          (response connection call-id)
-        (when (eq status :ok)
-          (destructuring-bind (&key pid lisp-implementation package &allow-other-keys)
-              connection-info
-            (format t "~&~A ~A running at ~A:~A (pid=~A)~%"
-                    (getf lisp-implementation :type)
-                    (getf lisp-implementation :version)
-                    (connection-hostname connection)
-                    (connection-port connection)
-                    pid)
-            (destructuring-bind (&key name prompt)
-                package
-              (setf (connection-package connection) name
-                    (connection-prompt connection) prompt))))))))
+  (log :debug "Initializing Swank REPL")
+  (swank-require '(swank-repl) connection)
+  (swank-create-repl connection)
+  (multiple-value-bind (info success)
+      (swank-connection-info connection)
+    (when success
+      (destructuring-bind (&key pid lisp-implementation package &allow-other-keys)
+          info
+        (format t "~&~A ~A running at ~A:~A (pid=~A)~%"
+                (getf lisp-implementation :type)
+                (getf lisp-implementation :version)
+                (connection-host connection)
+                (connection-port connection)
+                pid)
+        (destructuring-bind (&key name prompt)
+            package
+          (declare (ignore name))
+          (when (stringp prompt)
+            (setf (connection-package connection) prompt)))))))
 
 (defun prompt-string ()
   (format nil "~A> "
-          (connection-prompt *connection*)))
+          (connection-package *connection*)))
 
 (defun symbol-complete (text start end)
   (declare (ignore start end))
   (let ((func (function-at-point rl:*line-buffer* rl:*point*)))
     (if (or (string= text "")
             (not (equal text func)))
-        ;; TODO: Allow this to run asynchronously
-        (progn
-          (swank-arglist *connection* func)
-          (let ((call-id (connection-request-count *connection*)))
-            (wait-for-response-of-call *connection* call-id)
-            (let ((result (response *connection* call-id)))
-              (case (first result)
-                (:ok (list "" (color-text :gray (second result))))
-                (otherwise
-                 (log :error "Displaying arglist is failed")
-                 nil)))))
-        ;; TODO: Allow this to run asynchronously
-        (progn
-          (swank-complete *connection* func)
-          (let ((call-id (connection-request-count *connection*)))
-            (wait-for-response-of-call *connection* call-id)
-            (destructuring-bind (status result)
-                (response *connection* call-id)
-              (case status
-                (:ok
-                 (destructuring-bind (candidates &optional common)
-                     result
-                   (cons common candidates)))
-                (otherwise
-                 (log :error "Completion failed")
-                 nil))))))))
+        (multiple-value-bind (result success)
+            (swank-arglist func *connection*)
+          (if success
+              (list "" (color-text :gray result))
+              (progn
+                (log :error "Displaying arglist is failed")
+                nil)))
+        (multiple-value-bind (result success)
+            (swank-complete func *connection*)
+          (if success
+              (destructuring-bind (candidates &optional common)
+                  result
+                (cons common candidates))
+              (progn
+                (log :error "Completion failed")
+                nil))))))
 
 (defvar *previous-completions* nil)
 
@@ -133,30 +116,48 @@
                                         :port (or port 4005))
                      (create-swank-server :lisp lisp :port port)))
          (*connection* (connect-to-swank-server server)))
-    (start-processing *connection* (make-process-message-function *connection*))
+    (start-processing *connection*)
     (initialize-swank-repl *connection*)
 
     (loop
       (fresh-line)
       (handler-case
-          (handler-bind ((error #'uiop:print-condition-backtrace))
+          (handler-bind ((error #'uiop:print-condition-backtrace)
+                         (debug-return #'ignore-event))
             (let ((input (read-input (prompt-string))))
               (setf *previous-completions* nil)
               (cond
                 (input
                  (fresh-line)
-                 (handler-case (let ((call-id (swank-eval *connection* input)))
-                                 (loop
-                                   (handler-case
-                                       (progn
-                                         (wait-for-response-of-call *connection* call-id)
-                                         (destructuring-bind (status value)
-                                             (response *connection* call-id)
-                                           (when (eq status :abort)
-                                             (format t "~&;; Aborted on ~A~%" value)))
-                                         (return))
-                                     (mondo-debugger (debugger)
-                                       (process-debugger-mode *connection* debugger)))))
+                 (handler-case
+                     (let ((condvar (bt:make-condition-variable))
+                           (condlock (bt:make-lock))
+                           success
+                           result
+                           result-ready)
+                       (swank-listener-eval input *connection*
+                                            :ok (lambda (retval)
+                                                  (bt:with-lock-held (condlock)
+                                                    (setf success t
+                                                          result retval
+                                                          result-ready t)
+                                                    (bt:condition-notify condvar)))
+                                            :abort (lambda (condition)
+                                                     (bt:with-lock-held (condlock)
+                                                       (setf result condition
+                                                             result-ready t)
+                                                       (bt:condition-notify condvar))))
+                       (loop
+                         (handler-case
+                             (progn
+                               (bt:with-lock-held (condlock)
+                                 (loop until result-ready
+                                       do (bt:condition-wait condvar condlock)))
+                               (return))
+                           (debug-activate (event)
+                             (process-debugger-mode *connection* event))))
+                       (unless success
+                         (format t "~&;; Aborted on ~A~%" result)))
                    #+sbcl
                    (sb-sys:interactive-interrupt ()
                      (swank-interrupt *connection*))))
@@ -164,5 +165,5 @@
                  (format t "~&Bye.~%")
                  (return)))))
         (error ())
-        (mondo-debugger (debugger)
-          (process-debugger-mode *connection* debugger))))))
+        (debug-activate (event)
+          (process-debugger-mode *connection* event))))))
