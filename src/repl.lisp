@@ -72,7 +72,8 @@
         (multiple-value-bind (result success)
             (swank-arglist func *connection*)
           (if success
-              (list "" (color-text :gray result))
+              (and result
+                   (list "" (color-text :gray result)))
               (progn
                 (log :error "Displaying arglist is failed")
                 nil)))
