@@ -119,48 +119,52 @@
           (return (take-last el rule)))))
 
 (defun indent-level-by-rule (rule context)
-  (block nil
-    (let ((skipped-count (context-skipped-count context)))
-      (values
-        (etypecase rule
-          (null nil)
-          (integer (if (< skipped-count rule)
-                       4
-                       2))
-          ;; TODO: function call
-          (symbol nil)
-          (cons
-            (case (first rule)
-              (as (return
-                    (indent-level-by-rule (indentation-rule-of (second rule)) context)))
-              (otherwise
-                (let ((subrule (take-nth-subrule-in-rule rule skipped-count)))
-                  (etypecase subrule
-                    (null (if (context-inner-context context)
-                              (return (indent-level-by-rule nil (context-inner-context context)))
-                              nil))
-                    (integer (if (context-inner-context context)
-                                 (return (indent-level-by-rule nil (context-last-inner-context context)))
-                                 subrule))
-                    (symbol
-                      (case subrule
-                        (&body
-                          (let ((inner-context (context-inner-context context)))
-                            (if inner-context
-                                (if (context-function-name inner-context)
-                                    (return (indent-level-by-rule (indentation-rule-of (context-function-name inner-context))
-                                                          inner-context))
-                                    1)
-                                2)))
-                        (&lambda 4)
-                        ;; TODO: function call
-                        (otherwise)))
-                    (cons
-                      (if (context-inner-context context)
-                          (return (indent-level-by-rule subrule (context-inner-context context)))
-                          ;; Find &whole
+  (flet ((indent-level-with-context (context)
+           (let* ((function-name (context-function-name context))
+                  (rule (indentation-rule-of function-name)))
+             (when rule
+               (indent-level-by-rule rule context)))))
+    (block nil
+      (let ((skipped-count (context-skipped-count context)))
+        (values
+          (etypecase rule
+            (null nil)
+            (integer (if (< skipped-count rule)
+                         4
+                         2))
+            ;; TODO: function call
+            (symbol nil)
+            (cons
+              (case (first rule)
+                (as (return
+                      (indent-level-by-rule (indentation-rule-of (second rule)) context)))
+                (otherwise
+                  (let ((subrule (take-nth-subrule-in-rule rule skipped-count)))
+                    (etypecase subrule
+                      (null (if (context-inner-context context)
+                                (return (indent-level-with-context (context-inner-context context)))
+                                nil))
+                      (integer (if (context-inner-context context)
+                                   (return (indent-level-with-context (context-last-inner-context context)))
+                                   subrule))
+                      (symbol
+                        (case subrule
+                          (&body
+                            (let ((inner-context (context-inner-context context)))
+                              (if inner-context
+                                  (if (context-function-name inner-context)
+                                      (return (indent-level-with-context inner-context))
+                                      1)
+                                  2)))
+                          (&lambda 4)
+                          ;; TODO: function call
+                          (otherwise)))
+                      (cons
+                        (if (context-inner-context context)
+                            (return (indent-level-by-rule subrule (context-inner-context context)))
+                            ;; Find &whole
                           (second (member '&whole subrule))))))))))
-        context))))
+          context)))))
 
 (defun indent-level (input context prompt-length)
   (let* ((function-name (context-function-name context))
