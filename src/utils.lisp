@@ -2,6 +2,7 @@
   (:use #:cl)
   #-(or sbcl allegro ccl clisp)
   (:import-from #:babel)
+  (:import-from #:usocket)
   (:export #:find-shortest-nickname
            #:space-char-p
            #:*space-chars*
@@ -9,7 +10,9 @@
            #:integer-string-p
            #:starts-with
            #:string-to-octets
-           #:octets-to-string))
+           #:octets-to-string
+           #:port-available-p
+           #:random-port))
 (in-package #:mondo/utils)
 
 (defun find-shortest-nickname (package-names)
@@ -56,3 +59,23 @@
   #+clisp (ext:convert-string-from-bytes octets charset:utf-8 :start start :end end)
   #-(or sbcl allegro ccl clisp)
   (babel:octets-to-string octets :start start :end end :encoding :utf-8))
+
+(defun port-available-p (port)
+  (let (socket)
+    (unwind-protect
+         (handler-case (progn
+                         (setq socket (usocket:socket-listen "127.0.0.1" port :reuse-address t))
+                         t)
+           (usocket:address-in-use-error () nil)
+           (usocket:socket-error (e)
+             (warn "USOCKET:SOCKET-ERROR: ~A" e)
+             nil))
+      (when socket
+        (usocket:socket-close socket)
+        t))))
+
+(defun random-port ()
+  "Return a port number not in use from 50000 to 60000."
+  (loop for port from (+ 50000 (random 1000)) upto 60000
+        if (port-available-p port)
+          return port))
