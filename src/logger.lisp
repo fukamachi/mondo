@@ -34,7 +34,7 @@
 (defun log (level format-control &rest format-arguments)
   (when (<= *log-level* (level-to-int level))
     (format *log-stream*
-            "~&[~A] <~A> ~A~%"
+            "~&[~A] <~:@(~A~)> ~A~%"
             (now)
             level
             (apply #'format nil format-control format-arguments))))

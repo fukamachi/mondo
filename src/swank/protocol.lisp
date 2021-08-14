@@ -110,7 +110,8 @@
   (let* ((data (read-data-from-socket (connection-socket connection)))
          (message-string (octets-to-string data)))
     (with-standard-io-syntax
-      (let ((*package* *io-package*))
+      (let ((*package* *io-package*)
+            (*print-case* :downcase))
         (let ((message (read-from-string message-string)))
           (log :debug "Received: ~S" message)
           message)))))
