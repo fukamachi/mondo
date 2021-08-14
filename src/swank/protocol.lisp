@@ -228,7 +228,7 @@
                                                       :level level)
                                       main-thread))
         ((:ping thread tag)
-         (send-message `(:emacs-pong ,thread ,tag) connection))
+         (swank-send `(:emacs-pong ,thread ,tag) connection))
         ((t &rest rest)
          (declare (ignore rest))
          (log :error "Unknown event received: ~S" event))))))
