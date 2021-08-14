@@ -21,8 +21,10 @@
                 #:destructuring-ecase)
   (:export #:send-message
            #:receive-message
-           #:swank-eval-async
-           #:swank-eval
+           #:swank-send-async
+           #:swank-send
+           #:swank-rex-async
+           #:swank-rex
 
            #:make-dispatch-event-function
            #:event
@@ -113,40 +115,43 @@
           (log :debug "Received: ~S" message)
           message)))))
 
-(defun swank-eval-async (form connection &key (package "COMMON-LISP-USER") continuation (thread 't))
+(defun swank-send (message connection)
   (bt:with-recursive-lock-held ((connection-lock connection))
-    (let ((id (incf (connection-continuation-counter connection))))
-      (when continuation
-        (push
-          (cons id continuation)
-          (connection-rex-continuations connection)))
-      (send-message `(:emacs-rex ,form ,package ,thread ,id)
-                    connection))))
+    (send-message message connection)))
 
-(defun swank-eval (form connection &rest args &key package thread)
+(defun swank-rex-async (form connection &key (package "COMMON-LISP-USER") continuation (thread 't))
+  (let ((message
+          (bt:with-recursive-lock-held ((connection-lock connection))
+            (let ((id (incf (connection-continuation-counter connection))))
+              (when continuation
+                (push
+                  (cons id continuation)
+                  (connection-rex-continuations connection)))
+              `(:emacs-rex ,form ,package ,thread ,id)))))
+    (swank-send message connection)))
+
+(defun swank-rex (form connection &rest args &key package thread)
   (declare (ignore package thread))
   (let ((condvar (bt:make-condition-variable))
         (condlock (bt:make-lock))
-        success
-        result
+        raw-message
         result-ready)
-    (apply #'swank-eval-async form connection
+    (apply #'swank-rex-async form connection
            :continuation
            (lambda (message)
              (bt:with-lock-held (condlock)
-               (destructuring-ecase message
-                 ((:ok value)
-                  (setf success t
-                        result value))
-                 ((:abort condition)
-                  (setf result condition)))
-               (setf result-ready t)
+               (setf raw-message message
+                     result-ready t)
                (bt:condition-notify condvar)))
            args)
     (bt:with-lock-held (condlock)
       (loop until result-ready
             do (bt:condition-wait condvar condlock)))
-    (values result success)))
+    (destructuring-ecase raw-message
+      ((:ok value)
+       (values value t raw-message))
+      ((:abort condition)
+       (values condition nil raw-message)))))
 
 (define-condition event () ())
 
@@ -229,31 +234,31 @@
          (log :error "Unknown event received: ~S" event))))))
 
 (defun swank-require (modules connection)
-  (swank-eval `(swank:swank-require ',(loop for module in (ensure-list modules)
-                                            collect (intern (symbol-name module) *io-package*)))
-              connection))
+  (swank-rex `(swank:swank-require ',(loop for module in (ensure-list modules)
+                                           collect (intern (symbol-name module) *io-package*)))
+             connection))
 
 (defun swank-create-repl (connection)
-  (swank-eval `(swank-repl:create-repl nil :coding-system "utf-8-unix")
-              connection))
+  (swank-rex `(swank-repl:create-repl nil :coding-system "utf-8-unix")
+             connection))
 
 (defun swank-connection-info (connection)
-  (swank-eval '(swank:connection-info) connection))
+  (swank-rex '(swank:connection-info) connection))
 
 (defun swank-listener-eval (input connection &rest args &key continuation thread)
   (declare (ignore thread))
   (apply (if continuation
-             #'swank-eval-async
-             #'swank-eval)
+             #'swank-rex-async
+             #'swank-rex)
          `(swank-repl:listener-eval ,input)
          connection
          :package (connection-package connection)
          args))
 
 (defun swank-invoke-nth-restart (thread level restart-num connection)
-  (swank-eval-async `(swank:invoke-nth-restart-for-emacs ,level ,restart-num)
-                    connection
-                    :thread thread))
+  (swank-rex-async `(swank:invoke-nth-restart-for-emacs ,level ,restart-num)
+                   connection
+                   :thread thread))
 
 (defun swank-interrupt (connection)
   (#+sbcl sb-sys:without-interrupts
@@ -262,13 +267,13 @@
                  connection)))
 
 (defun swank-complete (prefix connection &optional (package-name (connection-package connection)))
-  (swank-eval `(swank:simple-completions ,prefix ',package-name)
-              connection))
+  (swank-rex `(swank:simple-completions ,prefix ',package-name)
+             connection))
 
 (defun swank-arglist (symbol-name connection &optional (package-name (connection-package connection)))
-  (swank-eval `(swank:operator-arglist ,symbol-name ',package-name)
-              connection))
+  (swank-rex `(swank:operator-arglist ,symbol-name ',package-name)
+             connection))
 
 (defun swank-throw-to-toplevel (thread connection)
-  (swank-eval '(swank:throw-to-toplevel) connection
-              :thread thread))
+  (swank-rex '(swank:throw-to-toplevel) connection
+             :thread thread))
