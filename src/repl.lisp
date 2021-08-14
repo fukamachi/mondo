@@ -89,7 +89,7 @@
 
 (defvar *previous-completions* nil)
 
-(defun run-repl (&key lisp host port)
+(defun run-repl (&key lisp source-registry host port)
   (use-keymap 'default)
   (rl:register-function :complete #'symbol-complete)
   (rl:register-hook :lsmatches (lambda (completions count longest-length)
@@ -115,7 +115,9 @@
   (let* ((server (if (or host port)
                      (make-swank-server :host (or host "127.0.0.1")
                                         :port (or port 4005))
-                     (create-swank-server :lisp lisp :port port)))
+                     (create-swank-server :lisp lisp
+                                          :source-registry source-registry
+                                          :port port)))
          (*connection* (connect-to-swank-server server)))
     (start-processing *connection*)
     (initialize-swank-repl *connection*)

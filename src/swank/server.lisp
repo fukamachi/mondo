@@ -43,13 +43,17 @@
     (usocket:connection-refused-error () nil)
     (usocket:connection-reset-error () nil)))
 
-(defun create-swank-server (&key lisp port)
+(defun create-swank-server (&key lisp source-registry port)
   (let ((lisp (or lisp "sbcl-bin"))
         (port (or port (random-port))))
     (log :debug "Starting a swank server on ~A at port=~A" lisp port)
     (let ((process (handler-case
                        (uiop:launch-program
-                         `("ros" "-L" ,lisp "-s" "swank" "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")
+                         `("ros" "-L" ,lisp
+                                 ,@(when source-registry
+                                     `("-S" ,source-registry))
+                                 "-s" "swank"
+                                 "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")
                          :input :stream
                          :output nil
                          :error-output :stream)

@@ -71,11 +71,13 @@
           "~&Usage: mondo [OPTIONS...]
 
 OPTIONS:
-    -L [NAME], --lisp [NAME]
+    -L, --lisp [NAME]
         Run the specific Lisp implementation (Default: sbcl-bin)
-    -h [NAME], --host [NAME]
+    -S, --source-registry [SOURCE REGISTRY]
+        Overwrite source registry of ASDF with the argument.
+    -h, --host [NAME]
         Hostname of the running Swank server to connect to
-    -p [PORT], --port [PORT]
+    -p, --port [PORT]
         Port of the running Swank server to connect to
     --no-color
         Disable colors
@@ -92,6 +94,7 @@ OPTIONS:
   (loop with lisp = nil
         with host = nil
         with port = nil
+        with source-registry = nil
         for option = (pop argv)
         while (and option
                    (starts-with "-" option))
@@ -100,6 +103,8 @@ OPTIONS:
               (unless argv
                 (error 'missing-option-value :option option))
               (setf lisp (pop argv)))
+             (("-S" "--source-registry")
+              (setf source-registry (pop argv)))
              (("-h" "--host")
               (unless argv
                 (error 'missing-option-value :option option))
@@ -118,6 +123,7 @@ OPTIONS:
                (error 'unknown-option
                       :option option)))
         finally (return (values (append (when lisp `(:lisp ,lisp))
+                                        (when source-registry `(:source-registry ,source-registry))
                                         (when host `(:host ,host))
                                         (when port `(:port ,port)))
                                 (if option

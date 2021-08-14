@@ -30,11 +30,13 @@ $ mondo --help
 Usage: mondo [OPTIONS...]
 
 OPTIONS:
-    -L [NAME], --lisp [NAME]
+    -L, --lisp [NAME]
         Run the specific Lisp implementation (Default: sbcl-bin)
-    -h [NAME], --host [NAME]
+    -S, --source-registry [SOURCE REGISTRY]
+        Overwrite source registry of ASDF with the argument.
+    -h, --host [NAME]
         Hostname of the running Swank server to connect to
-    -p [PORT], --port [PORT]
+    -p, --port [PORT]
         Port of the running Swank server to connect to
     --no-color
         Disable colors
