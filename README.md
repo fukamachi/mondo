@@ -41,6 +41,8 @@ OPTIONS:
         Hostname of the running Swank server to connect to
     -p, --port [PORT]
         Port of the running Swank server to connect to
+    --server [TYPE]
+        Start a server to communicate with external tools such as editors
     --no-color
         Disable colors
     --version

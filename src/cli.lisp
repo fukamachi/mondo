@@ -82,6 +82,8 @@ OPTIONS:
         Hostname of the running Swank server to connect to
     -p, --port [PORT]
         Port of the running Swank server to connect to
+    --server [TYPE]
+        Start a server to communicate with external tools such as editors
     --no-color
         Disable colors
     --version
@@ -122,6 +124,10 @@ ARGUMENTS:
                   (unless (every #'digit-char-p (first argv))
                     (error 'invalid-option-value :option option :value (first argv)))
                   `(:port ,(parse-integer (pop argv))))
+                 ("--server"
+                  (unless argv
+                    (error 'missing-option-value :option option))
+                  `(:server ,(pop argv)))
                  ("--no-color" (setf *enable-colors* nil) nil)
                  ("--version" (print-version) nil)
                  ("--help" (print-usage) nil)

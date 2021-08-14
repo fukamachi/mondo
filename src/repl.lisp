@@ -29,6 +29,8 @@
                 #:ignore-event)
   (:import-from #:mondo/debugger
                 #:process-debugger-mode)
+  (:import-from #:mondo/server
+                #:start-mondo-server)
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/color
@@ -98,7 +100,7 @@
     (when (uiop:directory-exists-p dot-qlot-dir)
       dot-qlot-dir)))
 
-(defun run-repl (directory &key lisp source-registry quicklisp host port)
+(defun run-repl (directory &key lisp source-registry quicklisp host port server)
   (use-keymap 'default)
   (rl:register-function :complete #'symbol-complete)
   (rl:register-hook :lsmatches (lambda (completions count longest-length)
@@ -121,19 +123,22 @@
                                        (print-prompt rl:+prompt+)
                                        (rl:on-new-line t))))))
 
-  (let* ((server (if (or host port)
-                     (make-swank-server :host (or host "127.0.0.1")
-                                        :port (or port 4005))
-                     (create-swank-server :lisp lisp
-                                          :source-registry (or source-registry
-                                                               directory)
-                                          :quicklisp (or quicklisp
-                                                         (and directory
-                                                              (directory-qlot-directory directory)))
-                                          :port port)))
-         (*connection* (connect-to-swank-server server)))
+  (let* ((swank-server (if (or host port)
+                           (make-swank-server :host (or host "127.0.0.1")
+                                              :port (or port 4005))
+                           (create-swank-server :lisp lisp
+                                                :source-registry (or source-registry
+                                                                     directory)
+                                                :quicklisp (or quicklisp
+                                                               (and directory
+                                                                    (directory-qlot-directory directory)))
+                                                :port port)))
+         (*connection* (connect-to-swank-server swank-server)))
     (start-processing *connection*)
     (initialize-swank-repl *connection*)
+    (when server
+      (start-mondo-server server
+                          :swank-connection *connection*))
 
     (loop
       (fresh-line)
