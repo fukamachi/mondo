@@ -15,7 +15,7 @@
                 #:debug-return
                 #:debug-return-level
                 #:ignore-event
-                #:swank-eval
+                #:swank-listener-eval
                 #:swank-throw-to-toplevel)
   (:shadowing-import-from #:mondo/logger
                           #:log)
@@ -113,8 +113,8 @@
                                  (string= input "abort"))
                              (swank-debugger-abort event connection))
                             (t
-                             (swank-eval `(swank-repl:listener-eval ,input) connection
-                                         :thread (debug-activate-thread event))))
+                             (swank-listener-eval input connection
+                                                  :thread (debug-activate-thread event))))
                           (swank-debugger-abort event connection))
                     (declare (ignore result))
                     (unless success  ;; when aborted

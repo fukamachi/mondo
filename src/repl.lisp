@@ -160,7 +160,8 @@
                                                      (bt:with-lock-held (condlock)
                                                        (setf result condition
                                                              result-ready t)
-                                                       (bt:condition-notify condvar))))
+                                                       (bt:condition-notify condvar)))
+                                            :async t)
                        (loop
                          (handler-case
                              (progn

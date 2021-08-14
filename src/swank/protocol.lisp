@@ -129,7 +129,7 @@
           (log :debug "Received: ~S" message)
           message)))))
 
-(defun swank-eval-async (form connection &key ok abort (thread 't))
+(defun swank-eval-async (form connection &key (package "COMMON-LISP-USER") ok abort (thread 't))
   (bt:with-recursive-lock-held ((connection-lock connection))
     (let ((id (incf (connection-continuation-counter connection))))
       (when (or ok abort)
@@ -143,10 +143,11 @@
                         (when abort
                           (funcall abort condition))))))
           (connection-rex-continuations connection)))
-      (send-message `(:emacs-rex ,form "COMMON-LISP-USER" ,thread ,id)
+      (send-message `(:emacs-rex ,form ,package ,thread ,id)
                     connection))))
 
-(defun swank-eval (form connection &key thread)
+(defun swank-eval (form connection &rest args &key package thread)
+  (declare (ignore package thread))
   (let ((condvar (bt:make-condition-variable))
         (condlock (bt:make-lock))
         success
@@ -164,8 +165,7 @@
                       (setf result condition
                             result-ready t)
                       (bt:condition-notify condvar)))
-           (when thread
-             (list :thread thread)))
+           args)
     (bt:with-lock-held (condlock)
       (loop until result-ready
             do (bt:condition-wait condvar condlock)))
@@ -263,12 +263,19 @@
 (defun swank-connection-info (connection)
   (swank-eval '(swank:connection-info) connection))
 
-(defun swank-listener-eval (input connection &key ok abort)
-  (swank-eval-async
-    `(swank-repl:listener-eval ,input)
-    connection
-    :ok ok
-    :abort abort))
+(defun swank-listener-eval (input connection &key ok abort (thread 't) async)
+  (assert (or (not (or ok abort))
+              async))
+  (apply (if async
+             #'swank-eval-async
+             #'swank-eval)
+         `(swank-repl:listener-eval ,input)
+         connection
+         :package (connection-package connection)
+         :thread thread
+         (when async
+           (list :ok ok
+                 :abort abort))))
 
 (defun swank-invoke-nth-restart (thread level restart-num connection)
   (swank-eval-async `(swank:invoke-nth-restart-for-emacs ,level ,restart-num)
