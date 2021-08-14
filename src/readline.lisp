@@ -71,6 +71,7 @@
                :erase-empty-line t
                :already-prompted t))
 
+(defvar *max-history-entries* 1000)
 (defvar *history-entries* '())
 
 (defun add-history (input)
@@ -167,5 +168,9 @@
     (uiop:with-output-file (out file
                                 :if-exists :supersede
                                 :if-does-not-exist :create)
-      (prin1 (reverse *history-entries*) out))
+      (prin1
+        (nreverse
+          (subseq *history-entries*
+                  0 (min (length *history-entries*) *max-history-entries*)))
+        out))
     file))
