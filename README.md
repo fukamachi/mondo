@@ -33,7 +33,10 @@ OPTIONS:
     -L, --lisp [NAME]
         Run the specific Lisp implementation (Default: sbcl-bin)
     -S, --source-registry [SOURCE REGISTRY]
-        Overwrite source registry of ASDF with the argument.
+        Overwrite source registry of ASDF with the argument
+    -Q, --quicklisp [QUICKLISP HOME]
+        Use the different Quicklisp home from the default one.
+        Would be useful when using Qlot.
     -h, --host [NAME]
         Hostname of the running Swank server to connect to
     -p, --port [PORT]

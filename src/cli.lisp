@@ -74,7 +74,10 @@ OPTIONS:
     -L, --lisp [NAME]
         Run the specific Lisp implementation (Default: sbcl-bin)
     -S, --source-registry [SOURCE REGISTRY]
-        Overwrite source registry of ASDF with the argument.
+        Overwrite source registry of ASDF with the argument
+    -Q, --quicklisp [QUICKLISP HOME]
+        Use the different Quicklisp home from the default one.
+        Would be useful when using Qlot.
     -h, --host [NAME]
         Hostname of the running Swank server to connect to
     -p, --port [PORT]
@@ -91,41 +94,36 @@ OPTIONS:
   (uiop:quit))
 
 (defun parse-argv (argv)
-  (loop with lisp = nil
-        with host = nil
-        with port = nil
-        with source-registry = nil
-        for option = (pop argv)
+  (loop for option = (pop argv)
         while (and option
                    (starts-with "-" option))
-        do (case-equal option
-             (("-L" "--lisp")
-              (unless argv
-                (error 'missing-option-value :option option))
-              (setf lisp (pop argv)))
-             (("-S" "--source-registry")
-              (setf source-registry (pop argv)))
-             (("-h" "--host")
-              (unless argv
-                (error 'missing-option-value :option option))
-              (setf host (pop argv)))
-             (("-p" "--port")
-              (unless argv
-                (error 'missing-option-value :option option))
-              (unless (every #'digit-char-p (first argv))
-                (error 'invalid-option-value :option option :value (first argv)))
-              (setf port (parse-integer (pop argv))))
-             ("--no-color" (setf *enable-colors* nil))
-             ("--version" (print-version))
-             ("--help" (print-usage))
-             ("--debug" (setf *log-level* +debug+))
-             (otherwise
-               (error 'unknown-option
-                      :option option)))
-        finally (return (values (append (when lisp `(:lisp ,lisp))
-                                        (when source-registry `(:source-registry ,source-registry))
-                                        (when host `(:host ,host))
-                                        (when port `(:port ,port)))
+        append (case-equal option
+                 (("-L" "--lisp")
+                  (unless argv
+                    (error 'missing-option-value :option option))
+                  `(:lisp ,(pop argv)))
+                 (("-S" "--source-registry")
+                  `(:source-registry ,(pop argv)))
+                 (("-Q" "--quicklisp")
+                  `(:quicklisp ,(pop argv)))
+                 (("-h" "--host")
+                  (unless argv
+                    (error 'missing-option-value :option option))
+                  `(:host ,(pop argv)))
+                 (("-p" "--port")
+                  (unless argv
+                    (error 'missing-option-value :option option))
+                  (unless (every #'digit-char-p (first argv))
+                    (error 'invalid-option-value :option option :value (first argv)))
+                  `(:port ,(parse-integer (pop argv))))
+                 ("--no-color" (setf *enable-colors* nil) nil)
+                 ("--version" (print-version) nil)
+                 ("--help" (print-usage) nil)
+                 ("--debug" (setf *log-level* +debug+) nil)
+                 (otherwise
+                   (error 'unknown-option
+                          :option option))) into options
+        finally (return (values options
                                 (if option
                                     (cons option argv)
                                     argv)))))

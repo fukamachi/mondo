@@ -43,17 +43,29 @@
     (usocket:connection-refused-error () nil)
     (usocket:connection-reset-error () nil)))
 
-(defun create-swank-server (&key lisp source-registry port)
+(defun normalize-quicklisp-path (path)
+  (etypecase path
+    (pathname
+      (uiop:escape-shell-command
+        (uiop:native-namestring (uiop:ensure-directory-pathname path))))
+    (string
+      (normalize-quicklisp-path (pathname path)))))
+
+(defun create-swank-server (&key lisp source-registry quicklisp port)
   (let ((lisp (or lisp "sbcl-bin"))
         (port (or port (random-port))))
     (log :debug "Starting a swank server on ~A at port=~A" lisp port)
     (let ((process (handler-case
                        (uiop:launch-program
-                         `("ros" "-L" ,lisp
-                                 ,@(when source-registry
-                                     `("-S" ,source-registry))
-                                 "-s" "swank"
-                                 "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")
+                         (format nil "~@[QUICKLISP_HOME=~A ~]~A"
+                                 (and quicklisp
+                                      (normalize-quicklisp-path quicklisp))
+                                 (uiop:escape-shell-command
+                                   `("ros" "-L" ,lisp
+                                           ,@(when source-registry
+                                               `("-S" ,source-registry))
+                                           "-s" "swank"
+                                           "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")))
                          :input :stream
                          :output nil
                          :error-output :stream)
