@@ -92,19 +92,24 @@
         (add-history input))
       input)))
 
+(defun indent ()
+  (let ((new-input (indent-input rl:*line-buffer* rl:*point* (length rl:+prompt+))))
+    (unless (equal rl:*line-buffer* new-input)
+      (replace-input new-input)
+      t)))
+
 (defun newline-or-continue (&rest args)
   (declare (ignore args))
   (if (input-complete-p rl:*line-buffer*)
       (setf rl:*done* 1)
-      (insert-text (format nil "~%"))))
+      (progn
+        (insert-text (format nil "~%"))
+        (indent))))
 
 (defun complete-or-indent (&rest args)
   (declare (ignore args))
   (if (find #\Newline rl:*line-buffer*)
-      (let ((new-input (indent-input rl:*line-buffer* rl:*point* (length rl:+prompt+))))
-        (if (equal rl:*line-buffer* new-input)
-            (complete)
-            (replace-input new-input)))
+      (or (indent) (complete))
       (complete))
   (values))
 
