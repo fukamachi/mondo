@@ -12,6 +12,7 @@
                 #:debug-activate-restarts
                 #:debug-activate-level
                 #:debug-activate-condition
+                #:debug-activate-frames
                 #:debug-return
                 #:debug-return-level
                 #:ignore-event
@@ -67,7 +68,8 @@
 
 (defun show-backtrace (&rest args)
   (declare (ignore args))
-  (with-slots (condition frames) *current-event*
+  (let ((condition (debug-activate-condition *current-event*))
+        (frames (debug-activate-frames *current-event*)))
     (uiop:run-program
       (format nil "echo ~S | less"
               (with-output-to-string (*standard-output*)
