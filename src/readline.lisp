@@ -121,10 +121,11 @@
   (rl:replace-line "" t)
   (rl:insert-text new-input))
 
-(defun read-input (prompt-string)
+(defun read-input (prompt-string &key no-history)
   (let ((input (readline :prompt prompt-string)))
     (when input
-      (unless (equal input "")
+      (when (and (not no-history)
+                 (not (equal input "")))
         (add-history input))
       input)))
 

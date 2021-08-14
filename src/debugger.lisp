@@ -101,7 +101,8 @@
                                (when (= level (debug-return-level event))
                                  (return-from process-debugger-mode)))))
               (loop
-                (let* ((input (read-input (debug-prompt level)))
+                (let* ((input (read-input (debug-prompt level)
+                                          :no-history t))
                        (input (and input
                                    (string-space-trim input))))
                   (multiple-value-bind (result success)
