@@ -27,7 +27,7 @@ Be sure that `~/.roswell/bin` is added to `PATH`.
 
 ```
 $ mondo --help
-Usage: mondo [OPTIONS...]
+Usage: mondo [OPTIONS...] [DIRECTORY]
 
 OPTIONS:
     -L, --lisp [NAME]
@@ -49,6 +49,12 @@ OPTIONS:
         Print this message
     --debug
         Print debug logs
+
+ARGUMENTS:
+    DIRECTORY
+        Optional.  If specified, add the directory path to ASDF source registry,
+        and use its local Quicklisp if exists.
+        ex) `mondo .` is equivalent to `mondo -S . -Q ./.qlot`.
 ```
 
 ## License

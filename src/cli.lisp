@@ -68,7 +68,7 @@
 
 (defun print-usage ()
   (format *error-output*
-          "~&Usage: mondo [OPTIONS...]
+          "~&Usage: mondo [OPTIONS...] [DIRECTORY]
 
 OPTIONS:
     -L, --lisp [NAME]
@@ -90,6 +90,12 @@ OPTIONS:
         Print this message
     --debug
         Print debug logs
+
+ARGUMENTS:
+    DIRECTORY
+        Optional.  If specified, add the directory path to ASDF source registry,
+        and use its local Quicklisp if exists.
+        ex) `mondo .` is equivalent to `mondo -S . -Q ./.qlot`.
 ")
   (uiop:quit))
 
@@ -132,9 +138,9 @@ OPTIONS:
   (handler-case
       (multiple-value-bind (options args)
           (parse-argv argv)
-        (when args
-          (error 'extra-arguments :args args))
-        (apply #'run-repl options))
+        (when (rest args)
+          (error 'extra-arguments :args (rest args)))
+        (apply #'run-repl (first args) options))
     #+sbcl
     (sb-sys:interactive-interrupt ()
       (format *error-output* "~&Bye.~%")

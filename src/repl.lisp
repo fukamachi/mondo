@@ -89,7 +89,14 @@
 
 (defvar *previous-completions* nil)
 
-(defun run-repl (&key lisp source-registry quicklisp host port)
+(defun directory-qlot-directory (directory)
+  (let* ((directory (uiop:ensure-directory-pathname directory))
+         (dot-qlot-dir
+           (merge-pathnames #P".qlot/" directory)))
+    (when (uiop:directory-exists-p dot-qlot-dir)
+      dot-qlot-dir)))
+
+(defun run-repl (directory &key lisp source-registry quicklisp host port)
   (use-keymap 'default)
   (rl:register-function :complete #'symbol-complete)
   (rl:register-hook :lsmatches (lambda (completions count longest-length)
@@ -116,8 +123,11 @@
                      (make-swank-server :host (or host "127.0.0.1")
                                         :port (or port 4005))
                      (create-swank-server :lisp lisp
-                                          :source-registry source-registry
-                                          :quicklisp quicklisp
+                                          :source-registry (or source-registry
+                                                               directory)
+                                          :quicklisp (or quicklisp
+                                                         (and directory
+                                                              (directory-qlot-directory directory)))
                                           :port port)))
          (*connection* (connect-to-swank-server server)))
     (start-processing *connection*)
