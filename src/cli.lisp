@@ -111,8 +111,12 @@ ARGUMENTS:
                     (error 'missing-option-value :option option))
                   `(:lisp ,(pop argv)))
                  (("-S" "--source-registry")
+                  (unless argv
+                    (error 'missing-option-value :option option))
                   `(:source-registry ,(pop argv)))
                  (("-Q" "--quicklisp")
+                  (unless argv
+                    (error 'missing-option-value :option option))
                   `(:quicklisp ,(pop argv)))
                  (("-h" "--host")
                   (unless argv
