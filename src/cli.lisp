@@ -142,7 +142,7 @@ OPTIONS:
       (format *error-output* "~&Bye.~%")
       (uiop:quit -1))
     (mondo-cli-error (e)
-      (format *error-output* (color-text :red e)))))
+      (format *error-output* "~&~A~%" (color-text :red (princ-to-string e))))))
 
 (defun main ()
   (destructuring-bind (&optional $0 &rest argv)
