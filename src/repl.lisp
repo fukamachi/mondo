@@ -6,7 +6,9 @@
                 #:*line-buffer*
                 #:defkeymap
                 #:use-keymap
-                #:default)
+                #:default
+                #:load-history
+                #:dump-history)
   (:import-from #:mondo/sexp/parse
                 #:function-at-point)
   (:import-from #:mondo/swank
@@ -93,10 +95,21 @@
 
 (defvar *previous-completions* nil)
 
+(defun setup-exit-hook (&key directory)
+  (let ((hook-fn (lambda () (dump-history :directory directory))))
+    (declare (ignorable hook-fn))
+    #+allegro
+    (push `(funcall ,hook-fn) sys:*exit-cleanup-forms*)
+    #+(or sbcl ccl clisp)
+    (push hook-fn
+          #+sbcl sb-ext:*exit-hooks*
+          #+ccl ccl:*lisp-cleanup-functions*
+          #+clisp custom:*fini-hooks*)
+    (values)))
+
 (defun directory-qlot-directory (directory)
-  (let* ((directory (uiop:ensure-directory-pathname directory))
-         (dot-qlot-dir
-           (merge-pathnames #P".qlot/" directory)))
+  (let ((dot-qlot-dir
+          (merge-pathnames #P".qlot/" directory)))
     (when (uiop:directory-exists-p dot-qlot-dir)
       dot-qlot-dir)))
 
@@ -123,12 +136,15 @@
                                        (print-prompt rl:+prompt+)
                                        (rl:on-new-line t))))))
 
-  (let* ((swank-server (if (or host port)
+  (let* ((directory (and directory
+                         (or (uiop:directory-exists-p directory)
+                             (error "Directory not exist: ~A" directory))))
+         (swank-server (if (or host port)
                            (make-swank-server :host (or host "127.0.0.1")
                                               :port (or port 4005))
                            (create-swank-server :lisp lisp
                                                 :source-registry (or source-registry
-                                                                     directory)
+                                                                     (uiop:native-namestring directory))
                                                 :quicklisp (or quicklisp
                                                                (and directory
                                                                     (directory-qlot-directory directory)))
@@ -139,6 +155,9 @@
     (when server
       (start-mondo-server server
                           :swank-connection *connection*))
+
+    (setup-exit-hook :directory directory)
+    (load-history :directory directory)
 
     (loop
       (fresh-line)

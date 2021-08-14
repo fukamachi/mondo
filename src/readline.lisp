@@ -7,6 +7,8 @@
   (:import-from #:mondo/sexp/parse
                 #:input-complete-p
                 #:function-at-point)
+  (:shadowing-import-from #:mondo/logger
+                          #:log)
   (:import-from #:cl-readline
                 #:*line-buffer*
                 #:insert-text)
@@ -25,8 +27,38 @@
            #:insert-text
            #:replace-input
 
-           #:default))
+           #:default
+
+           #:load-history
+           #:dump-history))
 (in-package #:mondo/readline)
+
+(defun data-directory ()
+  (let* ((data-home (uiop:getenv-absolute-directory "XDG_DATA_HOME"))
+         (data-home
+           (if data-home
+               (merge-pathnames #P"mondo/" data-home)
+               (merge-pathnames #P".mondo/" (user-homedir-pathname)))))
+    (ensure-directories-exist data-home)
+    data-home))
+
+(defun history-directory ()
+  (let ((history-dir (merge-pathnames #P"history/" (data-directory))))
+    (ensure-directories-exist history-dir)
+    history-dir))
+
+(defun history-file (&key directory tag)
+  (make-pathname
+    :name (or tag "default")
+    :defaults
+    (if directory
+        (merge-pathnames
+          (make-pathname :directory (cons :relative
+                                          (rest
+                                            (pathname-directory
+                                              (uiop:ensure-absolute-pathname directory)))))
+          (history-directory))
+        (history-directory))))
 
 (defun print-prompt (prompt-string)
   (format t "~&~A" (color-text :green prompt-string))
@@ -39,8 +71,11 @@
                :erase-empty-line t
                :already-prompted t))
 
+(defvar *history-entries* '())
+
 (defun add-history (input)
-  (cffi:foreign-funcall "add_history" :string input :void))
+  (prog1 (cffi:foreign-funcall "add_history" :string input :void)
+    (push input *history-entries*)))
 
 (defun bind-key (key func &optional (keymap (rl:get-keymap)))
   (rl:bind-keyseq key func :keymap keymap))
@@ -117,3 +152,20 @@
   ("\\C-i" #'complete-or-indent)
   ("\\C-m" #'newline-or-continue)
   ("\\C-j" #'newline-or-continue))
+
+(defun load-history (&key directory tag)
+  (let ((file (history-file :directory directory :tag tag)))
+    (when (probe-file file)
+      (log :debug "Reading a history list from '~A'" file)
+      (mapc #'add-history (uiop:safe-read-file-form file)))
+    file))
+
+(defun dump-history (&key directory tag)
+  (let ((file (history-file :directory directory :tag tag)))
+    (log :debug "Writing history to '~A'" file)
+    (ensure-directories-exist file)
+    (uiop:with-output-file (out file
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+      (prin1 (reverse *history-entries*) out))
+    file))

@@ -25,6 +25,11 @@
   (:report (lambda (condition stream)
              (with-slots (args) condition
                (format stream "Extra arguments: ~{~A~^ ~}" args)))))
+(define-condition directory-not-exist (mondo-cli-error)
+  ((directory :initarg :directory))
+  (:report (lambda (condition stream)
+             (with-slots (directory) condition
+               (format stream "Directory not exist: ~A" directory)))))
 (define-condition missing-option-value (mondo-cli-error)
   ((option :initarg :option))
   (:report (lambda (condition stream)
@@ -148,9 +153,14 @@ ARGUMENTS:
   (handler-case
       (multiple-value-bind (options args)
           (parse-argv argv)
-        (when (rest args)
-          (error 'extra-arguments :args (rest args)))
-        (apply #'run-repl (first args) options))
+        (destructuring-bind (&optional directory &rest extra-args)
+            args
+          (when extra-args
+            (error 'extra-arguments :args (rest args)))
+          (unless (or (null directory)
+                      (uiop:directory-exists-p directory))
+            (error 'directory-not-exist :directory directory))
+          (apply #'run-repl directory options)))
     #+sbcl
     (sb-sys:interactive-interrupt ()
       (format *error-output* "~&Bye.~%")
