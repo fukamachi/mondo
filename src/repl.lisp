@@ -34,6 +34,8 @@
   (:import-from #:mondo/color
                 #:color-text)
   (:import-from #:bordeaux-threads)
+  (:import-from #:alexandria
+                #:destructuring-ecase)
   (:export #:run-repl))
 (in-package #:mondo/repl)
 
@@ -150,18 +152,17 @@
                            result
                            result-ready)
                        (swank-listener-eval input *connection*
-                                            :ok (lambda (retval)
-                                                  (bt:with-lock-held (condlock)
-                                                    (setf success t
-                                                          result retval
-                                                          result-ready t)
-                                                    (bt:condition-notify condvar)))
-                                            :abort (lambda (condition)
-                                                     (bt:with-lock-held (condlock)
-                                                       (setf result condition
-                                                             result-ready t)
-                                                       (bt:condition-notify condvar)))
-                                            :async t)
+                                            :continuation
+                                            (lambda (message)
+                                              (bt:with-lock-held (condlock)
+                                                (destructuring-ecase message
+                                                  ((:ok value)
+                                                   (setf success t
+                                                         result value))
+                                                  ((:abort condition)
+                                                   (setf result condition)))
+                                                (setf result-ready t)
+                                                (bt:condition-notify condvar))))
                        (loop
                          (handler-case
                              (progn
