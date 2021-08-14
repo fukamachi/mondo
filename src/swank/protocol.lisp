@@ -10,10 +10,10 @@
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/utils
-                #:find-shortest-nickname)
+                #:find-shortest-nickname
+                #:string-to-octets
+                #:octets-to-string)
   (:import-from #:swank)
-  #-(or sbcl allegro ccl clisp)
-  (:import-from #:babel)
   (:import-from #:alexandria
                 #:when-let
                 #:ensure-list
@@ -55,22 +55,6 @@
 
 (defun decode-length (length-string)
   (parse-integer length-string :radix 16))
-
-(defun string-to-octets (string)
-  #+sbcl (sb-ext:string-to-octets string :external-format :utf-8)
-  #+allegro (excl:string-to-octets string :external-format :utf8)
-  #+ccl (ccl:encode-string-to-octets string :external-format :utf-8)
-  #+clisp (ext:convert-string-to-bytes string charset:utf-8)
-  #-(or sbcl allegro ccl clisp)
-  (babel:string-to-octets string :encoding :utf-8))
-
-(defun octets-to-string (octets)
-  #+sbcl (sb-ext:octets-to-string octets :external-format :utf-8)
-  #+allegro (excl:octets-to-string octets :external-format :utf8)
-  #+ccl (ccl:decode-string-from-octets octets :external-format :utf-8)
-  #+clisp (ext:convert-string-from-bytes octets charset:utf-8)
-  #-(or sbcl allegro ccl clisp)
-  (babel:octets-to-string octets :encoding :utf-8))
 
 (define-condition swank-network-error (error) ())
 
