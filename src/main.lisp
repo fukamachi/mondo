@@ -7,4 +7,4 @@
 (in-package #:mondo)
 
 (defun start ()
-  (run-repl))
+  (run-repl nil))
