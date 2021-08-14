@@ -121,8 +121,9 @@
   (flet ((indent-level-with-context (context)
            (let* ((function-name (context-function-name context))
                   (rule (indentation-rule-of function-name)))
-             (when rule
-               (indent-level-by-rule rule context)))))
+             (if rule
+                 (indent-level-by-rule rule context)
+                 (values nil context)))))
     (block nil
       (let ((skipped-count (context-skipped-count context)))
         (values
@@ -141,7 +142,7 @@
                   (let ((subrule (take-nth-subrule-in-rule rule skipped-count)))
                     (etypecase subrule
                       (null (if (context-inner-context context)
-                                (return (indent-level-with-context (context-inner-context context)))
+                                (return (indent-level-with-context (context-last-inner-context context)))
                                 nil))
                       (integer (if (context-inner-context context)
                                    (return (indent-level-with-context (context-last-inner-context context)))
@@ -182,7 +183,8 @@
           (+ (or level 0)
              (calc-padding (if level
                                func-base-point
-                               arg-base-point))))))))
+                               ;; arg-base-point will be NIL when no args exist
+                               (or arg-base-point (1+ func-base-point))))))))))
 
 (defun indent-input (input point prompt-length)
   (let* ((beginning-of-line (let ((pos (position #\Newline input
