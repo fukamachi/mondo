@@ -145,7 +145,7 @@
                                           (row-count (ceiling count column-item-count)))
                                      (when completions
                                        (setf *previous-completions* completions)
-                                       (fresh-line)
+                                       (format t "~%")
                                        (loop for row below row-count
                                              do (loop for column below column-item-count
                                                       for item = (pop completions)
