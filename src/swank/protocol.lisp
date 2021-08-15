@@ -33,6 +33,8 @@
            #:debug
            #:debug-activate
            #:debug-return
+           #:indentation-update
+           #:new-features
            #:ignore-event
 
            #:swank-require
@@ -192,6 +194,14 @@
    (continuations :initarg :continuations
                   :reader debug-return-continuations)))
 
+(define-condition new-features (event)
+  ((features :initarg :features
+             :reader new-features-features)))
+
+(define-condition indentation-update (event)
+  ((info :initarg :info
+         :reader indentation-update-info)))
+
 (defun invoke-event (event)
   (restart-case
       (error event)
@@ -223,9 +233,15 @@
          (setf (connection-package connection)
                (find-shortest-nickname (cons package-name nicknames))))
         ((:new-features features)
-         (declare (ignore features)))
+         (invoke-event-in-main-thread (make-condition 'new-features
+                                                      :features features
+                                                      :message event)
+                                      main-thread))
         ((:indentation-update info)
-         (declare (ignore info)))
+         (invoke-event-in-main-thread (make-condition 'indentation-update
+                                                      :info info
+                                                      :message event)
+                                      main-thread))
         ((:presentation-start id &optional target)
          (declare (ignore id target)))
         ((:presentation-end id &optional target)

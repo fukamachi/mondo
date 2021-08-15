@@ -27,8 +27,11 @@
                 #:swank-complete
                 #:swank-arglist
                 #:swank-interrupt
+                #:event
                 #:debug-activate
                 #:debug-return
+                #:new-features
+                #:indentation-update
                 #:ignore-event)
   (:shadowing-import-from #:mondo/swank/protocol
                           #:debug)
@@ -120,17 +123,16 @@
     (when (uiop:directory-exists-p dot-qlot-dir)
       dot-qlot-dir)))
 
-(defmacro with-forward-events ((server (&rest event-names)) &body body)
+(defmacro with-forward-events ((server &optional event-names) &body body)
   (with-gensyms (event)
     (once-only (server)
-      `(if ,server
-           (handler-bind ,(loop for name in event-names collect
-                                `(,name
-                                   (lambda (,event)
-                                     (receive-event ,server ,event)
-                                     (ignore-event ,event))))
-             ,@body)
-           (progn ,@body)))))
+      `(handler-bind ,(loop for name in (or event-names '(event)) collect
+                            `(,name
+                               (lambda (,event)
+                                 (when ,server
+                                   (receive-event ,server ,event))
+                                 (ignore-event ,event))))
+         ,@body))))
 
 (defun run-repl (directory &key lisp source-registry quicklisp host port server)
   (use-keymap 'default)
@@ -172,11 +174,13 @@
          (mondo-server (when server
                          (start-mondo-server server
                                              :swank-connection *connection*))))
-    (start-processing *connection*)
-    (initialize-swank-repl *connection*)
 
     (setup-exit-hook :directory directory)
     (load-history :directory directory)
+
+    (start-processing *connection*)
+    (with-forward-events (mondo-server)
+      (initialize-swank-repl *connection*))
 
     (loop
       (fresh-line)
@@ -184,7 +188,8 @@
           (with-debugger (*connection*)
             (handler-bind ((error #'uiop:print-condition-backtrace)
                            (debug-return #'ignore-event))
-              (with-forward-events (mondo-server (debug debug-activate debug-return))
+              (with-forward-events (mondo-server (debug debug-activate debug-return
+                                                        new-features indentation-update))
                 (let ((input (read-input (prompt-string))))
                   (setf *previous-completions* nil)
                   (cond
