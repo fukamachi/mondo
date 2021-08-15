@@ -23,6 +23,33 @@ Not only evaluating Lisp forms in the REPL, it also relays the communication wit
 
 ## Installation
 
+### Install GNU Readline
+
+For Debian/Ubuntu users, install `libreadline-dev` via apt:
+
+```
+$ apt install libreadline-dev
+```
+
+For macOS users, install `readline` via Homebrew:
+
+```
+$ brew install readline
+```
+
+If your Mac works with M1 chip, Homebrew installs under different directory, so the following steps will be additionally required:
+
+```
+$ sudo mkdir -p /usr/local/opt/readline/lib
+$ sudo ln -s  /opt/homebrew/opt/readline/lib/* /usr/local/opt/readline/lib
+```
+
+### Install Roswell
+
+See [Roswell's installation guide](https://github.com/roswell/roswell/wiki/Installation).
+
+### Install mondo
+
 ```
 $ ros install fukamachi/mondo
 ```
