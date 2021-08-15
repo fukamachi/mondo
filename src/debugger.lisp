@@ -78,18 +78,22 @@
 
 (defun show-backtrace (&rest args)
   (declare (ignore args))
-  (let ((condition (debug-condition *current-event*))
-        (frames (debug-frames *current-event*)))
-    (uiop:run-program
-      (format nil "echo ~S | less"
-              (with-output-to-string (*standard-output*)
-                (format t "~&~{~A~%~}" (remove-if #'null condition))
-                (format t "~2&Backtrace:~%")
-                (loop for (num frame) in frames
-                      do (format t "~&~A: ~A~%" num frame))))
-      :ignore-error-status t
-      :input :interactive
-      :output :interactive)))
+  (let* ((condition (debug-condition *current-event*))
+         (frames (debug-frames *current-event*))
+         (content
+           (with-output-to-string (*standard-output*)
+             (format t "~&~{~A~%~}" (remove-if #'null condition))
+             (format t "~2&Backtrace:~%")
+             (loop for (num frame) in frames
+                   do (format t "~&~A: ~A~%" num frame)))))
+    (handler-case
+        (uiop:run-program
+          (format nil "echo ~S | less" content)
+          :input :interactive
+          :output :interactive)
+      (uiop:subprocess-error ()
+        (format t "~%~A" content)
+        (rl:on-new-line nil)))))
 
 (defkeymap (debugger :base default)
   ("\\C-t" #'show-backtrace))
