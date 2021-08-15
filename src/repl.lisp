@@ -180,6 +180,9 @@
     (with-forward-events (mondo-server)
       (initialize-swank-repl *connection*))
 
+    (when directory
+      (format t "~&Project root: ~A~%" directory))
+
     (loop
       (fresh-line)
       (handler-case
