@@ -72,12 +72,7 @@
               (start-mondo-server server
                                   :swank-connection connection))))
 
-      (handler-bind ((error
-                       (lambda (e)
-                         (uiop:print-condition-backtrace e)
-                         (when-let ((restart (find-restart 'abort e)))
-                           (invoke-restart restart)))))
-        (with-forward-events (mondo-server)
-          (run-repl directory
-                    :connection connection
-                    :use-debugger (not mondo-server)))))))
+      (with-forward-events (mondo-server)
+        (run-repl directory
+                  :connection connection
+                  :use-debugger (not mondo-server))))))
