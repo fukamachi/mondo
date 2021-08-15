@@ -3,7 +3,6 @@
   (:import-from #:mondo/readline
                 #:read-input
                 #:*line-buffer*
-                #:defkeymap
                 #:use-keymap
                 #:default
                 #:load-history
@@ -14,10 +13,6 @@
                 #:connection-package
                 #:connection-host
                 #:connection-port
-                #:create-swank-server
-                #:make-swank-server
-                #:connect-to-swank-server
-                #:start-processing
                 #:swank-require
                 #:swank-create-repl
                 #:swank-init-presentations
@@ -25,29 +20,16 @@
                 #:swank-listener-eval
                 #:swank-complete
                 #:swank-arglist
-                #:swank-interrupt
-                #:event
-                #:debug-activate
-                #:debug-return
-                #:new-features
-                #:indentation-update
-                #:ignore-event)
-  (:shadowing-import-from #:mondo/swank/protocol
-                          #:debug)
+                #:swank-interrupt)
   (:import-from #:mondo/debugger
                 #:with-debugger)
-  (:import-from #:mondo/server
-                #:start-mondo-server
-                #:receive-event)
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/color
                 #:color-text)
   (:import-from #:bordeaux-threads)
   (:import-from #:alexandria
-                #:destructuring-ecase
-                #:with-gensyms
-                #:once-only)
+                #:destructuring-ecase)
   (:export #:run-repl))
 (in-package #:mondo/repl)
 
@@ -116,120 +98,94 @@
           #+clisp custom:*fini-hooks*)
     (values)))
 
-(defun directory-qlot-directory (directory)
-  (let ((dot-qlot-dir
-          (merge-pathnames #P".qlot/" directory)))
-    (when (uiop:directory-exists-p dot-qlot-dir)
-      dot-qlot-dir)))
+(defun handle-lsmatches (completions count longest-length)
+  (unless (equalp (rest completions) *previous-completions*)
+    (let* ((completions (rest completions))
+           (column-size (nth-value 1 (rl:get-screen-size)))
+           (item-size (+ 2 longest-length))
+           (column-item-count (max 1 (floor column-size item-size)))
+           (row-count (ceiling count column-item-count)))
+      (when completions
+        (setf *previous-completions* completions)
+        (format t "~%")
+        (loop for row below row-count
+              do (loop for column below column-item-count
+                       for item = (pop completions)
+                       while item
+                       do (format t "~vA" item-size item))
+              (format t "~%"))
+        (fresh-line)
+        (rl:on-new-line nil)))))
 
-(defmacro with-forward-events ((server &optional event-names) &body body)
-  (with-gensyms (event)
-    (once-only (server)
-      `(handler-bind ,(loop for name in (or event-names '(event)) collect
-                            `(,name
-                               (lambda (,event)
-                                 (when ,server
-                                   (receive-event ,server ,event))
-                                 (ignore-event ,event))))
-         ,@body))))
-
-(defun run-repl (directory &key lisp source-registry quicklisp host port server)
+(defun initialize-readline ()
   (use-keymap 'default)
   (rl:register-function :complete #'symbol-complete)
-  (rl:register-hook :lsmatches (lambda (completions count longest-length)
-                                 (unless (equalp (rest completions) *previous-completions*)
-                                   (let* ((completions (rest completions))
-                                          (column-size (nth-value 1 (rl:get-screen-size)))
-                                          (item-size (+ 2 longest-length))
-                                          (column-item-count (max 1 (floor column-size item-size)))
-                                          (row-count (ceiling count column-item-count)))
-                                     (when completions
-                                       (setf *previous-completions* completions)
-                                       (format t "~%")
-                                       (loop for row below row-count
-                                             do (loop for column below column-item-count
-                                                      for item = (pop completions)
-                                                      while item
-                                                      do (format t "~vA" item-size item))
-                                             (format t "~%"))
-                                       (fresh-line)
-                                       (rl:on-new-line nil))))))
+  (rl:register-hook :lsmatches #'handle-lsmatches))
 
-  (let* ((directory (and directory
-                         (or (uiop:directory-exists-p directory)
-                             (error "Directory not exist: ~A" directory))))
-         (swank-server (if (or host port)
-                           (make-swank-server :host (or host "127.0.0.1")
-                                              :port (or port 4005))
-                           (create-swank-server :lisp lisp
-                                                :source-registry (or source-registry
-                                                                     (uiop:native-namestring directory))
-                                                :quicklisp (or quicklisp
-                                                               (and directory
-                                                                    (directory-qlot-directory directory)))
-                                                :port port)))
-         (*connection* (connect-to-swank-server swank-server))
-         (mondo-server (when server
-                         (start-mondo-server server
-                                             :swank-connection *connection*))))
+(defmacro with-handling-mondo-errors (&body body)
+  `(handler-case
+       (handler-bind ((error #'uiop:print-condition-backtrace))
+         ,@body)
+     (error ())))
+
+(defmacro with-debugger* ((connection &key is-enabled) &body body)
+  `(flet ((main () ,@body))
+     (if ,is-enabled
+         (with-debugger (,connection)
+           (main))
+         (main))))
+
+(defun run-repl (directory &key connection use-debugger)
+  (initialize-readline)
+
+  (let* ((*connection* connection))
 
     (setup-exit-hook :directory directory)
     (load-history :directory directory)
 
-    (start-processing *connection*)
-    (with-forward-events (mondo-server)
-      (initialize-swank-repl *connection*))
+    (initialize-swank-repl *connection*)
 
     (when directory
       (format t "~&Project root: ~A~%" directory))
 
     (loop
       (fresh-line)
-      (handler-case
-          (with-debugger (*connection*)
-            (handler-bind ((error #'uiop:print-condition-backtrace)
-                           (debug-return #'ignore-event))
-              (with-forward-events (mondo-server (debug debug-activate debug-return
-                                                        new-features indentation-update))
-                (let ((input (read-input (prompt-string))))
-                  (setf *previous-completions* nil)
-                  (cond
-                    (input
-                     (fresh-line)
-                     (handler-case
-                         (let ((condvar (bt:make-condition-variable))
-                               (condlock (bt:make-lock))
-                               success
-                               result
-                               result-ready)
-                           (swank-listener-eval input *connection*
-                                                :continuation
-                                                (lambda (message)
-                                                  (bt:with-lock-held (condlock)
-                                                    (destructuring-ecase message
-                                                      ((:ok value)
-                                                       (setf success t
-                                                             result value))
-                                                      ((:abort condition)
-                                                       (setf result condition)))
-                                                    (setf result-ready t)
-                                                    (bt:condition-notify condvar))))
-                           (loop
-                             ;; Should be only when some clients are connected?
-                             (if server
-                                 #1=(progn
-                                      (bt:with-lock-held (condlock)
-                                        (loop until result-ready
-                                              do (bt:condition-wait condvar condlock)))
-                                      (return))
-                                 (with-debugger (*connection*)
-                                   #1#)))
-                           (unless success
-                             (format t "~&;; Aborted on ~A~%" result)))
-                       #+sbcl
-                       (sb-sys:interactive-interrupt ()
-                         (swank-interrupt *connection*))))
-                    (t
-                     (format t "~&Bye.~%")
-                     (return)))))))
-        (error ())))))
+      (with-handling-mondo-errors
+        (with-debugger* (*connection* :is-enabled use-debugger)
+          (let ((input (read-input (prompt-string))))
+            (setf *previous-completions* nil)
+            (cond
+              (input
+               (fresh-line)
+               (handler-case
+                   (let ((condvar (bt:make-condition-variable))
+                         (condlock (bt:make-lock))
+                         success
+                         result
+                         result-ready)
+                     (swank-listener-eval input *connection*
+                                          :continuation
+                                          (lambda (message)
+                                            (bt:with-lock-held (condlock)
+                                              (destructuring-ecase message
+                                                ((:ok value)
+                                                 (setf success t
+                                                       result value))
+                                                ((:abort condition)
+                                                 (setf result condition)))
+                                              (setf result-ready t)
+                                              (bt:condition-notify condvar))))
+                     (loop
+                       (with-debugger* (*connection* :is-enabled use-debugger)
+                         (bt:with-lock-held (condlock)
+                           (loop until result-ready
+                                 do (bt:condition-wait condvar condlock)))
+                         (return)))
+                     (unless success
+                       (format t "~&;; Aborted on ~A~%" result)))
+                 #+sbcl
+                 (sb-sys:interactive-interrupt ()
+                   (swank-interrupt *connection*))))
+              (t
+               (format t "~&Bye.~%")
+               (return)))))))))

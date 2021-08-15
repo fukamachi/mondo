@@ -1,7 +1,6 @@
 (defpackage #:mondo/cli
   (:use #:cl)
-  (:import-from #:mondo/repl
-                #:run-repl)
+  (:import-from #:mondo/main)
   (:import-from #:mondo/color
                 #:color-text
                 #:*enable-colors*)
@@ -160,7 +159,7 @@ ARGUMENTS:
           (unless (or (null directory)
                       (uiop:directory-exists-p directory))
             (error 'directory-not-exist :directory directory))
-          (apply #'run-repl directory options)))
+          (apply #'mondo:main directory options)))
     #+sbcl
     (sb-sys:interactive-interrupt ()
       (format *error-output* "~&Bye.~%")
