@@ -29,7 +29,9 @@
     (loop for i from 0
           for byte = (read-byte stream)
           until (eql byte (char-code #\Newline))
-          do (setf (aref (buffer-vector buffer) i) byte)
+          do (when (<= (length (buffer-vector buffer)) i)
+               (extend-buffer buffer))
+             (setf (aref (buffer-vector buffer) i) byte)
           finally
           (return (octets-to-string (buffer-vector buffer)
                                     :start 0 :end i)))))
