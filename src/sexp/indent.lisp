@@ -184,7 +184,9 @@
              (calc-padding (if level
                                func-base-point
                                ;; arg-base-point will be NIL when no args exist
-                               (or arg-base-point (1+ func-base-point))))))))))
+                               (or arg-base-point
+                                   (and func-base-point
+                                        (1+ func-base-point)))))))))))
 
 (defun indent-input (input point prompt-length)
   (let* ((beginning-of-line (let ((pos (position #\Newline input
