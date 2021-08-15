@@ -15,7 +15,6 @@
   (:import-from #:cffi)
   (:export #:readline
            #:read-input
-           #:print-prompt
            #:add-history
            #:bind-key
            #:defkeymap
@@ -60,16 +59,9 @@
           (history-directory))
         (history-directory))))
 
-(defun print-prompt (prompt-string)
-  (format t "~&~A" (color-text :green prompt-string))
-  (force-output))
-
 (defun readline (&key prompt)
-  (when prompt
-    (print-prompt prompt))
-  (rl:readline :prompt prompt
-               :erase-empty-line t
-               :already-prompted t))
+  (rl:readline :prompt (color-text :green prompt)
+               :erase-empty-line t))
 
 (defvar *max-history-entries* 1000)
 (defvar *history-entries* '())
@@ -129,8 +121,11 @@
         (add-history input))
       input)))
 
+(defun prompt-length ()
+  (cffi:foreign-funcall "rl_expand_prompt" :string rl:+prompt+ :int))
+
 (defun indent ()
-  (let ((new-input (indent-input rl:*line-buffer* rl:*point* (length rl:+prompt+))))
+  (let ((new-input (indent-input rl:*line-buffer* rl:*point* (prompt-length))))
     (unless (equal rl:*line-buffer* new-input)
       (replace-input new-input)
       t)))

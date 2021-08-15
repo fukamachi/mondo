@@ -1,7 +1,6 @@
 (defpackage #:mondo/repl
   (:use #:cl)
   (:import-from #:mondo/readline
-                #:print-prompt
                 #:read-input
                 #:*line-buffer*
                 #:defkeymap
@@ -154,8 +153,7 @@
                                                       do (format t "~vA" item-size item))
                                              (format t "~%"))
                                        (fresh-line)
-                                       (print-prompt rl:+prompt+)
-                                       (rl:on-new-line t))))))
+                                       (rl:on-new-line nil))))))
 
   (let* ((directory (and directory
                          (or (uiop:directory-exists-p directory)
