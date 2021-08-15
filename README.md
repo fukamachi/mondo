@@ -1,7 +1,9 @@
 # mondo
 
-This is a simple Common Lisp REPL, just like SLIME REPL that works on terminal.  
+This is a simple Common Lisp REPL, just like SLIME REPL that works on terminal.
 It's not intended to achieve the same behavior, but it aims to provide its functionality outside of Emacs.
+
+Not only evaluating Lisp forms in the REPL, it also relays the communication with a Swank server between different protocol servers over TCP. See [Editor Integration](#editor-integration) for the detail.
 
 ## Prequisite
 
@@ -10,10 +12,14 @@ It's not intended to achieve the same behavior, but it aims to provide its funct
 
 ## Features
 
-* Complete function/macro names
-* Show an argument list
+* Basic REPL functions
+  * Complete function/macro names
+  * Show an argument list
+  * Keep input history
 * Run a Lisp implementation by name and version
 * Connect to a running Swank server
+* TCP server to relay between a Swank server and editors
+  * Currently, only Vlime (Vim/Neovim) is supported
 
 ## Installation
 
@@ -54,10 +60,73 @@ OPTIONS:
 
 ARGUMENTS:
     DIRECTORY
-        Optional.  If specified, add the directory path to ASDF source registry,
-        and use its local Quicklisp if exists.
-        ex) `mondo .` is equivalent to `mondo -S . -Q ./.qlot`.
+        Optional. If specified, REPL will be started assuming that directory is the project root.
+        The directory path is added to ASDF source registry, and use its local Quicklisp if exists.
+        ex) `mondo .` is approximately equivalent to `mondo -S . -Q ./.qlot`.
 ```
+
+### Quickstart
+
+The simplest use case is to use REPL in Terminal.
+
+```
+$ mondo
+SBCL 2.1.7 running at 127.0.0.1:50476 (pid=484434)
+CL-USER>
+```
+
+If a directory path is given, REPL will be started assuming that directory is the project root.
+
+```
+$ cd /path/to/project
+$ mondo .
+SBCL 2.1.7 running at 127.0.0.1:50006 (pid=484668)
+Project root: /path/to/project/
+CL-USER>
+```
+
+ASDF systems in the directory are implicitly accessible by ASDF and Quicklisp. If `.qlot/` directory exists, mondo loads the project-local Quicklisp dist.
+
+### Editor Integration
+
+Mondo allows editors that can't accept Swank protocol to take advantage of Swank's powerful features through mondo.
+
+<img src="./images/mondo-server.png" width="500px" alt="Picture how mondo relays messages between an editor and a Swank server">
+
+#### Vlime (Vim/Neovim)
+
+Run `mondo` in Vlime server mode to communicate with Vlime.
+
+```
+$ mondo --server vlime
+Server created: (#(127 0 0 1) 50550)
+SBCL 2.1.7 running at 127.0.0.1:50006 (pid=485312)
+CL-USER>
+```
+
+When you see the REPL running, invoke `<LocalLeader>cc` on Vim/Neovim, and connect to the indicated port number (50550 in this case).
+
+A more sophisticated way to do this is to set up the following configurations, run an editor, and then run `<LocalLeader>rr`.
+
+```vimscript
+nnoremap <silent> <LocalLeader>rr :call VlimeStart()<CR>
+let g:vlime_cl_impl = "mondo"
+let g:vlime_cl_use_terminal = v:true
+
+function! VlimeBuildServerCommandFor_mondo(vlime_loader, vlime_eval)
+    return ["mondo", "--server", "vlime"]
+endfunction
+
+function! VlimeStart()
+    call vlime#server#New(v:true, get(g:, "vlime_cl_use_terminal", v:false))
+endfunction
+```
+
+## Other
+
+### Input history
+
+Input history is stored under `~/.mondo/history` (or `$XDG_DATA_HOME/mondo/history` if it's set).
 
 ## License
 

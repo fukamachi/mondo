@@ -100,9 +100,9 @@ OPTIONS:
 
 ARGUMENTS:
     DIRECTORY
-        Optional.  If specified, add the directory path to ASDF source registry,
-        and use its local Quicklisp if exists.
-        ex) `mondo .` is equivalent to `mondo -S . -Q ./.qlot`.
+        Optional. If specified, REPL will be started assuming that directory is the project root.
+        The directory path is added to ASDF source registry, and use its local Quicklisp if exists.
+        ex) `mondo .` is approximately equivalent to `mondo -S . -Q ./.qlot`.
 ")
   (uiop:quit))
 
