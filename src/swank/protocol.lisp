@@ -1,5 +1,6 @@
 (defpackage #:mondo/swank/protocol
   (:use #:cl)
+  (:shadow #:debug)
   (:import-from #:mondo/swank/connection
                 #:connection
                 #:connection-package
@@ -28,6 +29,8 @@
 
            #:make-dispatch-event-function
            #:event
+           #:event-message
+           #:debug
            #:debug-activate
            #:debug-return
            #:ignore-event
@@ -91,7 +94,7 @@
                          (let ((*package* *io-package*)
                                (*print-case* :downcase))
                            (prin1-to-string sexp)))))
-      (log :debug "Sending: ~S" sexp-string)
+      (log :debug "Sending: ~A" sexp-string)
       (write-data-to-socket (string-to-octets sexp-string)
                             (connection-socket connection)))))
 
@@ -154,25 +157,39 @@
       ((:abort condition)
        (values condition nil raw-message)))))
 
-(define-condition event () ())
+(define-condition event ()
+  ((message :initarg :message
+            :reader event-message)))
+
+(define-condition debug (event)
+  ((thread :initarg :thread
+           :reader debug-thread)
+   (level :initarg :level
+          :reader debug-level)
+   (condition :initarg :condition
+              :reader debug-condition)
+   (restarts :initarg :restarts
+             :reader debug-restarts)
+   (frames :initarg :frames
+           :reader debug-frames)
+   (continuations :initarg :continuations
+                  :reader debug-continuations)))
 
 (define-condition debug-activate (event)
   ((thread :initarg :thread
            :reader debug-activate-thread)
    (level :initarg :level
           :reader debug-activate-level)
-   (condition :initarg :condition
-              :reader debug-activate-condition)
-   (restarts :initarg :restarts
-             :reader debug-activate-restarts)
-   (frames :initarg :frames
-           :reader debug-activate-frames)))
+   (select :initarg :select
+           :reader debug-activate-select)))
 
 (define-condition debug-return (event)
   ((thread :initarg :thread
            :reader debug-return-thread)
    (level :initarg :level
-          :reader debug-return-level)))
+          :reader debug-return-level)
+   (continuations :initarg :continuations
+                  :reader debug-return-continuations)))
 
 (defun invoke-event (event)
   (restart-case
@@ -188,8 +205,7 @@
   (bt:interrupt-thread main-thread #'invoke-event event))
 
 (defun make-dispatch-event-function (connection &optional main-thread)
-  (let ((main-thread (or main-thread (bt:current-thread)))
-        (debug-info (make-hash-table :test 'eql)))
+  (let ((main-thread (or main-thread (bt:current-thread))))
     (lambda (event)
       (destructuring-case event
         ((:return value id)
@@ -211,22 +227,28 @@
         ((:indentation-update info)
          (declare (ignore info)))
         ((:debug thread level condition restarts frames continuations)
-         (declare (ignore continuations))
-         (setf (gethash level debug-info)
-               (make-condition 'debug-activate
-                               :thread thread
-                               :level level
-                               :condition condition
-                               :restarts restarts
-                               :frames frames)))
+         (invoke-event-in-main-thread (make-condition 'debug
+                                                      :thread thread
+                                                      :level level
+                                                      :condition condition
+                                                      :restarts restarts
+                                                      :frames frames
+                                                      :continuations continuations
+                                                      :message event)
+                                      main-thread))
         ((:debug-activate thread level &optional select)
-         (declare (ignore thread select))
-         (invoke-event-in-main-thread (gethash level debug-info) main-thread))
+         (invoke-event-in-main-thread (make-condition 'debug-activate
+                                                      :thread thread
+                                                      :level level
+                                                      :select select
+                                                      :message event)
+                                      main-thread))
         ((:debug-return thread level continuations)
-         (declare (ignore continuations))
          (invoke-event-in-main-thread (make-condition 'debug-return
                                                       :thread thread
-                                                      :level level)
+                                                      :level level
+                                                      :continuations continuations
+                                                      :message event)
                                       main-thread))
         ((:ping thread tag)
          (swank-send `(:emacs-pong ,thread ,tag) connection))

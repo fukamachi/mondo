@@ -29,17 +29,22 @@
                 #:debug-activate
                 #:debug-return
                 #:ignore-event)
+  (:shadowing-import-from #:mondo/swank/protocol
+                          #:debug)
   (:import-from #:mondo/debugger
-                #:process-debugger-mode)
+                #:with-debugger)
   (:import-from #:mondo/server
-                #:start-mondo-server)
+                #:start-mondo-server
+                #:receive-event)
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/color
                 #:color-text)
   (:import-from #:bordeaux-threads)
   (:import-from #:alexandria
-                #:destructuring-ecase)
+                #:destructuring-ecase
+                #:with-gensyms
+                #:once-only)
   (:export #:run-repl))
 (in-package #:mondo/repl)
 
@@ -113,6 +118,18 @@
     (when (uiop:directory-exists-p dot-qlot-dir)
       dot-qlot-dir)))
 
+(defmacro with-forward-events ((server (&rest event-names)) &body body)
+  (with-gensyms (event)
+    (once-only (server)
+      `(if ,server
+           (handler-bind ,(loop for name in event-names collect
+                                `(,name
+                                   (lambda (,event)
+                                     (receive-event ,server ,event)
+                                     (ignore-event ,event))))
+             ,@body)
+           (progn ,@body)))))
+
 (defun run-repl (directory &key lisp source-registry quicklisp host port server)
   (use-keymap 'default)
   (rl:register-function :complete #'symbol-complete)
@@ -149,12 +166,12 @@
                                                                (and directory
                                                                     (directory-qlot-directory directory)))
                                                 :port port)))
-         (*connection* (connect-to-swank-server swank-server)))
+         (*connection* (connect-to-swank-server swank-server))
+         (mondo-server (when server
+                         (start-mondo-server server
+                                             :swank-connection *connection*))))
     (start-processing *connection*)
     (initialize-swank-repl *connection*)
-    (when server
-      (start-mondo-server server
-                          :swank-connection *connection*))
 
     (setup-exit-hook :directory directory)
     (load-history :directory directory)
@@ -162,48 +179,49 @@
     (loop
       (fresh-line)
       (handler-case
-          (handler-bind ((error #'uiop:print-condition-backtrace)
-                         (debug-return #'ignore-event))
-            (let ((input (read-input (prompt-string))))
-              (setf *previous-completions* nil)
-              (cond
-                (input
-                 (fresh-line)
-                 (handler-case
-                     (let ((condvar (bt:make-condition-variable))
-                           (condlock (bt:make-lock))
-                           success
-                           result
-                           result-ready)
-                       (swank-listener-eval input *connection*
-                                            :continuation
-                                            (lambda (message)
-                                              (bt:with-lock-held (condlock)
-                                                (destructuring-ecase message
-                                                  ((:ok value)
-                                                   (setf success t
-                                                         result value))
-                                                  ((:abort condition)
-                                                   (setf result condition)))
-                                                (setf result-ready t)
-                                                (bt:condition-notify condvar))))
-                       (loop
-                         (handler-case
-                             (progn
-                               (bt:with-lock-held (condlock)
-                                 (loop until result-ready
-                                       do (bt:condition-wait condvar condlock)))
-                               (return))
-                           (debug-activate (event)
-                             (process-debugger-mode *connection* event))))
-                       (unless success
-                         (format t "~&;; Aborted on ~A~%" result)))
-                   #+sbcl
-                   (sb-sys:interactive-interrupt ()
-                     (swank-interrupt *connection*))))
-                (t
-                 (format t "~&Bye.~%")
-                 (return)))))
-        (error ())
-        (debug-activate (event)
-          (process-debugger-mode *connection* event))))))
+          (with-debugger (*connection*)
+            (handler-bind ((error #'uiop:print-condition-backtrace)
+                           (debug-return #'ignore-event))
+              (with-forward-events (mondo-server (debug debug-activate debug-return))
+                (let ((input (read-input (prompt-string))))
+                  (setf *previous-completions* nil)
+                  (cond
+                    (input
+                     (fresh-line)
+                     (handler-case
+                         (let ((condvar (bt:make-condition-variable))
+                               (condlock (bt:make-lock))
+                               success
+                               result
+                               result-ready)
+                           (swank-listener-eval input *connection*
+                                                :continuation
+                                                (lambda (message)
+                                                  (bt:with-lock-held (condlock)
+                                                    (destructuring-ecase message
+                                                      ((:ok value)
+                                                       (setf success t
+                                                             result value))
+                                                      ((:abort condition)
+                                                       (setf result condition)))
+                                                    (setf result-ready t)
+                                                    (bt:condition-notify condvar))))
+                           (loop
+                             ;; Should be only when some clients are connected?
+                             (if server
+                                 #1=(progn
+                                      (bt:with-lock-held (condlock)
+                                        (loop until result-ready
+                                              do (bt:condition-wait condvar condlock)))
+                                      (return))
+                                 (with-debugger (*connection*)
+                                   #1#)))
+                           (unless success
+                             (format t "~&;; Aborted on ~A~%" result)))
+                       #+sbcl
+                       (sb-sys:interactive-interrupt ()
+                         (swank-interrupt *connection*))))
+                    (t
+                     (format t "~&Bye.~%")
+                     (return)))))))
+        (error ())))))

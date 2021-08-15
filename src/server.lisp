@@ -11,6 +11,7 @@
            #:make-server
            #:start-server
            #:stop-server
+           #:receive-event
            #:server-not-found
            #:start-mondo-server))
 (in-package #:mondo/server)
@@ -36,6 +37,8 @@
           (server-port object)))
 
 (defgeneric stop-server (object))
+
+(defgeneric receive-event (object event))
 
 (define-condition server-not-found (error)
   ((name :initarg :name))
@@ -71,4 +74,5 @@
   (let* ((class-name (load-server-package server-name))
          (server
            (apply #'make-server class-name initargs)))
-    (start-server server)))
+    (start-server server)
+    server))

@@ -3,6 +3,8 @@
   (:import-from #:mondo/utils
                 #:octets-to-string
                 #:string-to-octets)
+  (:shadowing-import-from #:mondo/logger
+                          #:log)
   (:import-from #:yason
                 #:parse
                 #:encode)
@@ -107,6 +109,7 @@
   (let* ((line (read-vlime-line stream))
          (json (yason:parse line))
          (vlime-message (json-to-form json)))
+    (log :debug "Received VLIME message: ~A" line)
     (if (client-emacs-rex-p vlime-message)
         (destructuring-bind (id message)
             vlime-message
@@ -125,5 +128,6 @@
                  (yason:encode vlime-message s)))
          (payload
            (string-to-octets (format nil "~A~C~C" json #\Return #\Newline))))
+    (log :debug "Sending to VLIME: ~A" json)
     (write-sequence payload stream)
     (force-output stream)))
