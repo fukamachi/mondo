@@ -21,6 +21,7 @@
                 #:start-processing
                 #:swank-require
                 #:swank-create-repl
+                #:swank-init-presentations
                 #:swank-connection-info
                 #:swank-listener-eval
                 #:swank-complete
@@ -52,8 +53,9 @@
 
 (defun initialize-swank-repl (connection)
   (log :debug "Initializing Swank REPL")
-  (swank-require '(swank-repl) connection)
+  (swank-require '(swank-repl swank-presentations) connection)
   (swank-create-repl connection)
+  (swank-init-presentations connection)
   (multiple-value-bind (info success)
       (swank-connection-info connection)
     (when success

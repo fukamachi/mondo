@@ -138,7 +138,9 @@
 (defun newline-or-continue (&rest args)
   (declare (ignore args))
   (if (input-complete-p rl:*line-buffer*)
-      (setf rl:*done* 1)
+      (progn
+        (format t "~%")
+        (setf rl:*done* 1))
       (progn
         (insert-text (format nil "~%"))
         (indent))))

@@ -37,6 +37,7 @@
 
            #:swank-require
            #:swank-create-repl
+           #:swank-init-presentations
            #:swank-connection-info
            #:swank-listener-eval
            #:swank-invoke-nth-restart
@@ -47,7 +48,7 @@
 (in-package #:mondo/swank/protocol)
 
 (eval-when (:compile-toplevel :load-toplevel)
-  (swank:swank-require '(swank-repl)))
+  (swank:swank-require '(swank-repl swank-presentations)))
 
 (deftype octet ()
   '(unsigned-byte 8))
@@ -215,8 +216,7 @@
                    (remove rex-cont (connection-rex-continuations connection)))
              (funcall (cdr rex-cont) value))))
         ((:write-string output &optional target)
-         (when (eq target :repl-result)
-           (fresh-line))
+         (declare (ignore target))
          (write-string output)
          (force-output))
         ((:new-package package-name &rest nicknames)
@@ -226,6 +226,10 @@
          (declare (ignore features)))
         ((:indentation-update info)
          (declare (ignore info)))
+        ((:presentation-start id &optional target)
+         (declare (ignore id target)))
+        ((:presentation-end id &optional target)
+         (declare (ignore id target)))
         ((:debug thread level condition restarts frames continuations)
          (invoke-event-in-main-thread (make-condition 'debug
                                                       :thread thread
@@ -264,6 +268,9 @@
 (defun swank-create-repl (connection)
   (swank-rex `(swank-repl:create-repl nil :coding-system "utf-8-unix")
              connection))
+
+(defun swank-init-presentations (connection)
+  (swank-rex '(swank:init-presentations) connection))
 
 (defun swank-connection-info (connection)
   (swank-rex '(swank:connection-info) connection))
