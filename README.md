@@ -28,7 +28,7 @@ Not only evaluating Lisp forms in the REPL, it also relays the communication wit
 For Debian/Ubuntu users, install `libreadline-dev` via apt:
 
 ```
-$ apt install libreadline-dev
+$ sudo apt install libreadline-dev
 ```
 
 For macOS users, install `readline` via Homebrew:
