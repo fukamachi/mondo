@@ -10,7 +10,8 @@
                 #:encode)
   (:import-from #:alexandria
                 #:destructuring-case
-                #:ensure-gethash)
+                #:ensure-gethash
+                #:when-let)
   (:export #:read-message
            #:write-message))
 (in-package #:mondo/server/vlime/protocol)
@@ -94,9 +95,11 @@
                      *json-cache*
                      (let ((sym-obj (make-hash-table :test #'equal))
                            (sym-name (symbol-name form))
-                           (sym-package (package-name (symbol-package form))))
+                           (sym-package (when-let (pkg (symbol-package form))
+                                          (package-name pkg))))
                        (setf (gethash "name" sym-obj) sym-name)
-                       (setf (gethash "package" sym-obj) sym-package)
+                       (when sym-package
+                         (setf (gethash "package" sym-obj) sym-package))
                        sym-obj)))
     (t
      ; Numbers & strings
