@@ -118,9 +118,14 @@
     (with-standard-io-syntax
       (let ((*package* *io-package*)
             (*print-case* :downcase))
-        (let ((message (read-from-string message-string)))
-          (log :debug "Received: ~S" message)
-          message)))))
+        (handler-bind ((error
+                         (lambda (e)
+                           (when-let ((restart (find-restart 'unintern e)))
+                             (invoke-restart restart))
+                           (log :error "Failed to read a string message: ~S~%  ~A" message-string e))))
+          (let ((message (read-from-string message-string)))
+            (log :debug "Received: ~S" message)
+            message))))))
 
 (defun swank-send (message connection)
   (bt:with-recursive-lock-held ((connection-lock connection))
