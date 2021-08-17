@@ -13,20 +13,20 @@
                 #:receive-message)
   (:shadowing-import-from #:mondo/logger
                           #:log)
+  (:import-from #:mondo/utils
+                #:make-thread)
   (:import-from #:bordeaux-threads)
   (:export #:connect-to-swank-server
            #:start-processing))
 (in-package #:mondo/swank/client)
 
 (defun make-process-thread (connection process-fn)
-  (bt:make-thread
+  (make-thread
     (lambda ()
       (loop
         (let ((message (receive-message connection)))
           (when message
             (funcall process-fn message)))))
-    :initial-bindings `((*standard-output* . ,*standard-output*)
-                        (*error-output* . ,*error-output*))
     :name "mondo swank message processor"))
 
 (defun connect-to-swank-server (swank-server)

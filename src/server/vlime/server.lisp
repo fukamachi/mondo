@@ -11,7 +11,8 @@
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/utils
-                #:octets-to-string)
+                #:octets-to-string
+                #:make-thread)
   (:import-from #:usocket)
   (:import-from #:bordeaux-threads)
   (:import-from #:alexandria
@@ -54,12 +55,9 @@
   (with-slots (lock main-thread) server
     (bt:with-lock-held (lock)
       (setf main-thread
-            (bt:make-thread
+            (make-thread
               (lambda ()
                 (main-thread-loop server))
-              :initial-bindings
-              `((*standard-output* . ,*standard-output*)
-                (*error-output* . ,*error-output*))
               :name "vlime server main thread"))))
 
   (values))
@@ -72,12 +70,9 @@
         (bt:with-lock-held ((vlime-server-lock server))
           (let ((client (make-client :socket client-socket)))
             (setf (client-thread client)
-                  (bt:make-thread
+                  (make-thread
                     (lambda ()
                       (client-thread-loop client (server-swank-connection server)))
-                    :initial-bindings
-                    `((*standard-output* . ,*standard-output*)
-                      (*error-output* . ,*error-output*))
                     :name "vlime client loop thread"))
             (push client (slot-value server 'clients))))))))
 

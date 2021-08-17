@@ -27,6 +27,8 @@
                           #:log)
   (:import-from #:mondo/color
                 #:color-text)
+  (:import-from #:mondo/utils
+                #:add-exit-hook)
   (:import-from #:bordeaux-threads)
   (:import-from #:alexandria
                 #:destructuring-ecase)
@@ -86,18 +88,6 @@
 
 (defvar *previous-completions* nil)
 
-(defun setup-exit-hook (&key directory)
-  (let ((hook-fn (lambda () (dump-history :directory directory))))
-    (declare (ignorable hook-fn))
-    #+allegro
-    (push `(funcall ,hook-fn) sys:*exit-cleanup-forms*)
-    #+(or sbcl ccl clisp)
-    (push hook-fn
-          #+sbcl sb-ext:*exit-hooks*
-          #+ccl ccl:*lisp-cleanup-functions*
-          #+clisp custom:*fini-hooks*)
-    (values)))
-
 (defun handle-lsmatches (completions count longest-length)
   (unless (equalp (rest completions) *previous-completions*)
     (let* ((completions (rest completions))
@@ -140,7 +130,7 @@
 
   (let* ((*connection* connection))
 
-    (setup-exit-hook :directory directory)
+    (add-exit-hook (lambda () (dump-history :directory directory)))
     (load-history :directory directory)
 
     (initialize-swank-repl *connection*)

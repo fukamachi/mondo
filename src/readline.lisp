@@ -9,6 +9,8 @@
                 #:function-at-point)
   (:shadowing-import-from #:mondo/logger
                           #:log)
+  (:import-from #:mondo/utils
+                #:data-directory)
   (:import-from #:cl-readline
                 #:*line-buffer*
                 #:insert-text)
@@ -31,15 +33,6 @@
            #:load-history
            #:dump-history))
 (in-package #:mondo/readline)
-
-(defun data-directory ()
-  (let* ((data-home (uiop:getenv-absolute-directory "XDG_DATA_HOME"))
-         (data-home
-           (if data-home
-               (merge-pathnames #P"mondo/" data-home)
-               (merge-pathnames #P".mondo/" (user-homedir-pathname)))))
-    (ensure-directories-exist data-home)
-    data-home))
 
 (defun history-directory ()
   (let ((history-dir (merge-pathnames #P"history/" (data-directory))))
