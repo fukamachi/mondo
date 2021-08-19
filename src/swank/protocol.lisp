@@ -101,31 +101,43 @@
       (write-data-to-socket (string-to-octets sexp-string)
                             (connection-socket connection)))))
 
+(defun read-n-bytes-from-socket (socket n-bytes)
+  (let ((stream (usocket:socket-stream socket))
+        (data (make-array n-bytes :element-type 'octet))
+        (read-bytes 0))
+    (loop
+      (let ((bytes (handler-case
+                       (read-sequence data stream :start read-bytes)
+                     (error ()
+                       (return)))))
+        (incf read-bytes bytes)
+        (when (= read-bytes n-bytes)
+          (return data))
+        (usocket:wait-for-input socket)))))
+
+(defun read-message-length (socket)
+  (when-let (length-data (read-n-bytes-from-socket socket 6))
+    (decode-length (octets-to-string length-data))))
+
 (defun read-data-from-socket (socket)
   (check-type socket usocket:stream-usocket)
-  (let ((stream (usocket:socket-stream socket))
-        (length-data (make-array 6 :element-type 'octet)))
-    (read-sequence length-data stream)
-
-    (let* ((body-length (decode-length (octets-to-string length-data)))
-           (body-data (make-array body-length :element-type 'octet)))
-      (read-sequence body-data stream)
-      body-data)))
+  (when-let (body-length (read-message-length socket))
+    (read-n-bytes-from-socket socket body-length)))
 
 (defun receive-message (connection)
-  (let* ((data (read-data-from-socket (connection-socket connection)))
-         (message-string (octets-to-string data)))
-    (with-standard-io-syntax
-      (let ((*package* *io-package*)
-            (*print-case* :downcase))
-        (handler-bind ((error
-                         (lambda (e)
-                           (when-let ((restart (find-restart 'unintern e)))
-                             (invoke-restart restart))
-                           (log :error "Failed to read a string message: ~S~%  ~A" message-string e))))
-          (let ((message (read-from-string message-string)))
-            (log :debug "Received: ~S" message)
-            message))))))
+  (when-let (data (read-data-from-socket (connection-socket connection)))
+    (let ((message-string (octets-to-string data)))
+      (with-standard-io-syntax
+        (let ((*package* *io-package*)
+              (*print-case* :downcase))
+          (handler-bind ((error
+                           (lambda (e)
+                             (when-let ((restart (find-restart 'unintern e)))
+                               (invoke-restart restart))
+                             (log :error "Failed to read a string message: ~S~%  ~A" message-string e))))
+            (let ((message (read-from-string message-string)))
+              (log :debug "Received: ~S" message)
+              message)))))))
 
 (defun swank-send (message connection)
   (bt:with-recursive-lock-held ((connection-lock connection))
