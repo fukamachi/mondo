@@ -64,7 +64,9 @@
            (*context* (make-context)))
        (when ,outer-context
          (setf (context-inner-context ,outer-context) *context*))
-       (values (handler-case (progn ,@body)
+       (values (handler-case (prog1 (progn ,@body)
+                               (when ,outer-context
+                                 (setf (context-inner-context ,outer-context) nil)))
                  (incomplete-form (e)
                    (incomplete-form (slot-value e 'type))))
                *context*))))
@@ -136,7 +138,7 @@
 (defun skip-quoted (buffer quote-char &key type)
   (assert (char= (current-char buffer) quote-char))
   (unless (forward-char buffer)
-    (return-from skip-quoted))
+    (incomplete-form type))
   (loop until (buffer-end-p buffer)
         for char = (current-char buffer)
         do (cond
@@ -189,11 +191,13 @@
         do (cond
              ((and (char= char #\#)
                    (eql (next-char buffer) #\|))
-              (with-context-in "comment"
-                (skip-block-comment buffer)))
+              (with-context
+                (with-context-in "comment"
+                  (skip-block-comment buffer))))
              ((char= char #\;)
-              (with-context-in "comment"
-                (skip-inline-comment buffer)))
+              (with-context
+                (with-context-in "comment"
+                  (skip-inline-comment buffer))))
              ((char= char #\Return)
               (incf (buffer-line buffer))
               (or (forward-char buffer)
@@ -221,47 +225,48 @@
   (block nil
     (when (buffer-end-p buffer)
       (return))
-    (let ((char (current-char buffer)))
-      (case char
-        (#\"
-         (with-context-in "string"
-           (skip-string buffer)))
-        (#\#
-         (forward-char buffer)
-         (skip-while buffer #'digit-char-p)
-         (when (or (buffer-end-p buffer)
-                   (space-char-p (current-char buffer)))
-           (return))
-         (forward-char buffer)
-         (skip-spaces buffer)
-         (when (buffer-end-p buffer)
-           (incomplete-form 'form))
-         (read-form buffer))
-        (#\| (skip-quoted-symbol buffer))
-        (#\; (with-context-in "comment"
-               (skip-inline-comment buffer)))
-        ((#\' #\` #\,)
-         (forward-char buffer)
-         (skip-spaces buffer)
-         (when (buffer-end-p buffer)
-           (incomplete-form 'form))
-         (read-form buffer))
-        (#\:
-         (forward-char buffer)
-         (when (buffer-end-p buffer)
-           (incomplete-form 'symbol))
-         (read-atom buffer))
-        (otherwise
-          (loop until (buffer-end-p buffer)
-                for char = (current-char buffer)
-                do (case char
-                     ((#\" #\( #\) #\' #\` #\,)
-                      (return))
-                     (#.*space-chars* (return))
-                     (#\| (skip-quoted-symbol buffer))
-                     (#\\ (skip-next-char buffer :type 'symbol))
-                     (otherwise
-                       (forward-char buffer)))))))))
+    (with-context
+      (let ((char (current-char buffer)))
+        (case char
+          (#\"
+           (with-context-in "string"
+             (skip-string buffer)))
+          (#\#
+           (forward-char buffer)
+           (skip-while buffer #'digit-char-p)
+           (when (or (buffer-end-p buffer)
+                     (space-char-p (current-char buffer)))
+             (return))
+           (forward-char buffer)
+           (skip-spaces buffer)
+           (when (buffer-end-p buffer)
+             (incomplete-form 'form))
+           (read-form buffer))
+          (#\| (skip-quoted-symbol buffer))
+          (#\; (with-context-in "comment"
+                 (skip-inline-comment buffer)))
+          ((#\' #\` #\,)
+           (forward-char buffer)
+           (skip-spaces buffer)
+           (when (buffer-end-p buffer)
+             (incomplete-form 'form))
+           (read-form buffer))
+          (#\:
+           (forward-char buffer)
+           (when (buffer-end-p buffer)
+             (incomplete-form 'symbol))
+           (read-atom buffer))
+          (otherwise
+           (loop until (buffer-end-p buffer)
+                 for char = (current-char buffer)
+                 do (case char
+                      ((#\" #\( #\) #\' #\` #\,)
+                       (return))
+                      (#.*space-chars* (return))
+                      (#\| (skip-quoted-symbol buffer))
+                      (#\\ (skip-next-char buffer :type 'symbol))
+                      (otherwise
+                       (forward-char buffer))))))))))
 
 (defun read-list (buffer)
   (assert (char= (current-char buffer) #\())
@@ -312,13 +317,14 @@
 
 (defun parse (input &key end)
   (let ((buffer (make-buffer input :end end)))
-    (skip-spaces buffer)
     (handler-case
-        (loop until (buffer-end-p buffer)
-              do (read-form buffer)
-                 (skip-spaces buffer)
-                 (skip-unmatched-closed-parens buffer)
-              finally (return nil))
+        (progn
+          (skip-spaces buffer)
+          (loop until (buffer-end-p buffer)
+                do (read-form buffer)
+                (skip-spaces buffer)
+                (skip-unmatched-closed-parens buffer)
+                finally (return nil)))
       (incomplete-form (e)
         (slot-value e 'context)))))
 
