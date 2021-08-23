@@ -291,7 +291,6 @@
                     (setf line (buffer-line buffer))
                     (setf (arg-base-point) (buffer-point buffer)))
                   (read-list buffer)
-                  (setf (inner-context) nil)
                   (incf (skipped-count)))
                  (otherwise
                   (when (and (not initial)
