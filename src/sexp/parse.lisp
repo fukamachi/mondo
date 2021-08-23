@@ -3,7 +3,10 @@
   (:import-from #:mondo/utils
                 #:space-char-p
                 #:*space-chars*)
+  (:import-from #:alexandria
+                #:with-gensyms)
   (:export #:parse
+           #:context-in
            #:input-complete-p
            #:function-at-point))
 (in-package #:mondo/sexp/parse)
@@ -11,11 +14,19 @@
 (defvar *context* nil)
 
 (defstruct context
+  in
   function-name
   func-base-point
   arg-base-point
   (skipped-count 0)
   inner-context)
+
+(defmacro with-context-in (in &body body)
+  (with-gensyms (before)
+    `(let ((,before (context-in *context*)))
+       (setf (context-in *context*) ,in)
+       (prog1 (progn ,@body)
+         (setf (context-in *context*) ,before)))))
 
 (defun function-name ()
   (context-function-name *context*))
@@ -178,9 +189,11 @@
         do (cond
              ((and (char= char #\#)
                    (eql (next-char buffer) #\|))
-              (skip-block-comment buffer))
+              (with-context-in "comment"
+                (skip-block-comment buffer)))
              ((char= char #\;)
-              (skip-inline-comment buffer))
+              (with-context-in "comment"
+                (skip-inline-comment buffer)))
              ((char= char #\Return)
               (incf (buffer-line buffer))
               (or (forward-char buffer)
@@ -210,7 +223,9 @@
       (return))
     (let ((char (current-char buffer)))
       (case char
-        (#\" (skip-string buffer))
+        (#\"
+         (with-context-in "string"
+           (skip-string buffer)))
         (#\#
          (forward-char buffer)
          (skip-while buffer #'digit-char-p)
@@ -223,7 +238,8 @@
            (incomplete-form 'form))
          (read-form buffer))
         (#\| (skip-quoted-symbol buffer))
-        (#\; (skip-inline-comment buffer))
+        (#\; (with-context-in "comment"
+               (skip-inline-comment buffer)))
         ((#\' #\` #\,)
          (forward-char buffer)
          (skip-spaces buffer)

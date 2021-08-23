@@ -2,6 +2,7 @@
   (:use #:cl)
   (:import-from #:mondo/sexp/parse
                 #:parse
+                #:context-in
                 #:context-function-name
                 #:context-func-base-point
                 #:context-arg-base-point
@@ -200,7 +201,9 @@
                                          :start beginning-of-line)
                             point))
          (context (parse input :end start-of-line))
-         (padding (indent-level input context prompt-length)))
+         (padding (if (context-in context)
+                      0
+                      (indent-level input context prompt-length))))
     (concatenate 'string
                  (subseq input 0 beginning-of-line)
                  (make-string padding :initial-element #\Space)
