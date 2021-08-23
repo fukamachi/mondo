@@ -7,8 +7,8 @@
   (:import-from #:mondo/logger
                 #:*log-level*
                 #:+debug+)
-  (:import-from #:mondo/utils
-                #:starts-with)
+  (:import-from #:alexandria
+                #:starts-with-subseq)
   (:export #:main
            #:mondo-command))
 (in-package #:mondo/cli)
@@ -108,7 +108,7 @@ ARGUMENTS:
 (defun parse-argv (argv)
   (loop for option = (pop argv)
         while (and option
-                   (starts-with "-" option))
+                   (starts-with-subseq "-" option))
         append (case-equal option
                  (("-L" "--lisp")
                   (unless argv

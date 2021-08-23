@@ -9,7 +9,6 @@
            #:*space-chars*
            #:string-space-trim
            #:integer-string-p
-           #:starts-with
            #:string-to-octets
            #:octets-to-string
            #:port-available-p
@@ -42,11 +41,6 @@
   (let ((trimmed (string-space-trim value)))
     (and (/= 0 (length trimmed))
          (every #'digit-char-p trimmed))))
-
-(defun starts-with (prefix string)
-  (check-type string string)
-  (and (<= (length prefix) (length string))
-       (string= prefix string :end2 (length prefix))))
 
 (defun string-to-octets (string &key (start 0) (end (length string)))
   #+sbcl (sb-ext:string-to-octets string :start start :end end :external-format :utf-8)
