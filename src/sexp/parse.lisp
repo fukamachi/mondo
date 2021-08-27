@@ -13,20 +13,16 @@
 
 (defvar *context* nil)
 
+(deftype context-in-type ()
+  '(member :symbol :string :comment :list))
+
 (defstruct context
-  in
+  (in nil :type context-in-type)
   function-name
   func-base-point
   arg-base-point
   (skipped-count 0)
   inner-context)
-
-(defmacro with-context-in (in &body body)
-  (with-gensyms (before)
-    `(let ((,before (context-in *context*)))
-       (setf (context-in *context*) ,in)
-       (prog1 (progn ,@body)
-         (setf (context-in *context*) ,before)))))
 
 (defun function-name ()
   (context-function-name *context*))
@@ -58,10 +54,10 @@
 (defun (setf inner-context) (new-value)
   (setf (context-inner-context *context*) new-value))
 
-(defmacro with-context (&body body)
+(defmacro with-context ((&optional in) &body body)
   (let ((outer-context (gensym "OUTER-CONTEXT")))
     `(let ((,outer-context *context*)
-           (*context* (make-context)))
+           (*context* (make-context :in ,in)))
        (when ,outer-context
          (setf (context-inner-context ,outer-context) *context*))
        (values (handler-case (prog1 (progn ,@body)
@@ -191,13 +187,11 @@
         do (cond
              ((and (char= char #\#)
                    (eql (next-char buffer) #\|))
-              (with-context
-                (with-context-in "comment"
-                  (skip-block-comment buffer))))
+              (with-context (:comment)
+                (skip-block-comment buffer)))
              ((char= char #\;)
-              (with-context
-                (with-context-in "comment"
-                  (skip-inline-comment buffer))))
+              (with-context (:comment)
+                (skip-inline-comment buffer)))
              ((char= char #\Return)
               (incf (buffer-line buffer))
               (or (forward-char buffer)
@@ -225,52 +219,61 @@
   (block nil
     (when (buffer-end-p buffer)
       (return))
-    (with-context
-      (let ((char (current-char buffer)))
-        (case char
-          (#\"
-           (with-context-in "string"
-             (skip-string buffer)))
-          (#\#
-           (forward-char buffer)
-           (skip-while buffer #'digit-char-p)
-           (when (or (buffer-end-p buffer)
-                     (space-char-p (current-char buffer)))
-             (return))
-           (forward-char buffer)
-           (skip-spaces buffer)
-           (when (buffer-end-p buffer)
-             (incomplete-form 'form))
-           (read-form buffer))
-          (#\| (skip-quoted-symbol buffer))
-          (#\; (with-context-in "comment"
-                 (skip-inline-comment buffer)))
-          ((#\' #\` #\,)
-           (forward-char buffer)
-           (skip-spaces buffer)
-           (when (buffer-end-p buffer)
-             (incomplete-form 'form))
-           (read-form buffer))
-          (#\:
+    (let ((char (current-char buffer)))
+      (case char
+        (#\"
+         (with-context (:string)
+           (skip-string buffer)))
+        (#\#
+         (forward-char buffer)
+         (skip-while buffer #'digit-char-p)
+         (when (or (buffer-end-p buffer)
+                   (space-char-p (current-char buffer)))
+           (return))
+         (forward-char buffer)
+         (skip-spaces buffer)
+         (when (buffer-end-p buffer)
+           (incomplete-form 'form))
+         (read-form buffer))
+        (#\|
+         (if (eq (context-in *context*) :symbol)
+             (skip-quoted-symbol buffer)
+             (with-context (:symbol)
+               (skip-quoted-symbol buffer))))
+        (#\; (with-context (:comment)
+               (skip-inline-comment buffer)))
+        ((#\' #\` #\,)
+         (forward-char buffer)
+         (skip-spaces buffer)
+         (when (buffer-end-p buffer)
+           (incomplete-form 'form))
+         (read-form buffer))
+        (#\:
+         (with-context (:symbol)
            (forward-char buffer)
            (when (buffer-end-p buffer)
              (incomplete-form 'symbol))
-           (read-atom buffer))
-          (otherwise
-           (loop until (buffer-end-p buffer)
-                 for char = (current-char buffer)
-                 do (case char
-                      ((#\" #\( #\) #\' #\` #\,)
-                       (return))
-                      (#.*space-chars* (return))
-                      (#\| (skip-quoted-symbol buffer))
-                      (#\\ (skip-next-char buffer :type 'symbol))
-                      (otherwise
-                       (forward-char buffer))))))))))
+           (read-atom buffer)))
+        (otherwise
+         (flet ((read-symbol ()
+                  (loop until (buffer-end-p buffer)
+                        for char = (current-char buffer)
+                        do (case char
+                             ((#\" #\( #\) #\' #\` #\,)
+                              (return))
+                             (#.*space-chars* (return))
+                             (#\| (skip-quoted-symbol buffer))
+                             (#\\ (skip-next-char buffer :type 'symbol))
+                             (otherwise
+                               (forward-char buffer))))))
+           (if (eq (context-in *context*) :symbol)
+               (read-symbol)
+               (with-context (:symbol)
+                 (read-symbol)))))))))
 
 (defun read-list (buffer)
   (assert (char= (current-char buffer) #\())
-  (with-context
+  (with-context (:list)
     (forward-char buffer)
     (skip-spaces buffer)
     (when (buffer-end-p buffer)
@@ -321,8 +324,8 @@
           (skip-spaces buffer)
           (loop until (buffer-end-p buffer)
                 do (read-form buffer)
-                (skip-spaces buffer)
-                (skip-unmatched-closed-parens buffer)
+                   (skip-spaces buffer)
+                   (skip-unmatched-closed-parens buffer)
                 finally (return nil)))
       (incomplete-form (e)
         (slot-value e 'context)))))

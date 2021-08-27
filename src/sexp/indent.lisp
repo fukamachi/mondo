@@ -201,7 +201,8 @@
                                          :start beginning-of-line)
                             point))
          (context (parse input :end start-of-line))
-         (padding (if (context-in context)
+         (padding (if (member (context-in context)
+                              '(:string :comment :symbol))
                       0
                       (indent-level input context prompt-length))))
     (concatenate 'string
