@@ -41,6 +41,7 @@
     (ok (null (parse* "#\\#")))
     (ok (null (parse* "#\\|")))
     (ok (null (parse* "#\\:")))
+    (ok (eq (context-in (parse* "#\\")) :character))
     (ok (null (parse* ";; \"
                       ")))
     (ok (eq (context-in (parse* ";; |")) :comment))

@@ -14,7 +14,7 @@
 (defvar *context* nil)
 
 (deftype context-in-type ()
-  '(member :symbol :string :comment :list))
+  '(member :symbol :string :comment :list :character :atom :composite :form))
 
 (defstruct context
   (in nil :type context-in-type)
@@ -61,10 +61,12 @@
            (*context* (make-context :in ,in)))
        (when ,outer-context
          (setf (context-inner-context ,outer-context) *context*))
-       (values (handler-case (prog1 (progn ,@body)
-                               (when ,outer-context
-                                 (setf (context-inner-context ,outer-context) nil)))
+       (values (handler-case
+                   (prog1 (progn ,@body)
+                     (when ,outer-context
+                       (setf (context-inner-context ,outer-context) nil)))
                  (incomplete-form (e)
+                   ;; Rethrow with the upper context
                    (incomplete-form (slot-value e 'type))))
                *context*))))
 
@@ -226,24 +228,23 @@
             (with-context (:comment)
               (skip-block-comment buffer)))
            (#\\
-            (forward-char buffer)
-            (forward-char buffer)
-            (when (buffer-end-p buffer)
-              #+fixme(incomplete-form 'form)
-              (return))
-            (forward-char buffer))
+            (with-context (:character)
+              (forward-char buffer)
+              (forward-char buffer)
+              (when (buffer-end-p buffer)
+                (incomplete-form 'atom))
+              (forward-char buffer)))
            (otherwise
-             (forward-char buffer)
-             (skip-while buffer #'digit-char-p)
-             (when (or (buffer-end-p buffer)
-                       (space-char-p (current-char buffer)))
-               ;; FIXME: no context
-               #+fixme(incomplete-form 'form)
-               (return))
-             (forward-char buffer)
-             (skip-spaces buffer)
-             (when (buffer-end-p buffer)
-               (incomplete-form 'form))
+             (with-context (:composite)
+               (forward-char buffer)
+               (skip-while buffer #'digit-char-p)
+               (when (or (buffer-end-p buffer)
+                         (space-char-p (current-char buffer)))
+                 (incomplete-form 'form))
+               (forward-char buffer)
+               (skip-spaces buffer)
+               (when (buffer-end-p buffer)
+                 (incomplete-form 'composite)))
              (read-form buffer))))
         (#\|
          (if (and *context*
@@ -255,10 +256,11 @@
         (#\; (with-context (:comment)
                (skip-inline-comment buffer)))
         ((#\' #\` #\,)
-         (forward-char buffer)
-         (skip-spaces buffer)
-         (when (buffer-end-p buffer)
-           (incomplete-form 'form))
+         (with-context (:form)
+           (forward-char buffer)
+           (skip-spaces buffer)
+           (when (buffer-end-p buffer)
+             (incomplete-form 'form)))
          (read-form buffer))
         (#\:
          (with-context (:symbol)
