@@ -221,7 +221,8 @@
         (#\"
          (with-context (:string)
            (skip-string buffer))
-         (incf (element-count)))
+         (when *context*
+           (incf (element-count))))
         (#\#
          (case (next-char buffer)
            (#\|
@@ -252,7 +253,8 @@
              (skip-quoted-symbol buffer)
              (with-context (:symbol)
                (skip-quoted-symbol buffer)))
-         (incf (element-count)))
+         (when *context*
+           (incf (element-count))))
         (#\; (with-context (:comment)
                (skip-inline-comment buffer)))
         ((#\' #\` #\,)
@@ -281,11 +283,13 @@
                              (otherwise
                                (forward-char buffer)))
                         finally (return *context*))))
-           (if (eq (context-in *context*) :symbol)
+           (if (and *context*
+                    (eq (context-in *context*) :symbol))
                (read-symbol)
                (with-context (:symbol)
                  (read-symbol)))
-           (incf (element-count))))))))
+           (when *context*
+             (incf (element-count)))))))))
 
 (defun read-list (buffer)
   (assert (char= (current-char buffer) #\())
@@ -345,7 +349,8 @@
                    (skip-unmatched-closed-parens buffer)
                 finally (return nil)))
       (incomplete-form (e)
-        (slot-value e 'context)))))
+        (or (slot-value e 'context)
+            (make-context :in :form))))))
 
 (defun input-complete-p (input)
   (not (parse input)))

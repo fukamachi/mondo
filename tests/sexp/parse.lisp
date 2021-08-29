@@ -17,6 +17,10 @@
            (let ((context (parse input)))
              (when context
                (context-last-inner-context context)))))
+    (ok (null (parse* "\"a\"")))
+    (ok (null (parse* "'a")))
+    (ok (null (parse* "123")))
+    (ok (null (parse* "|aBc|")))
     (ok (eq (context-in (parse* "(")) :list))
     (ok (eq (context-in (parse* "\"")) :string))
     (ok (eq (context-in (parse* "|")) :symbol))
@@ -42,6 +46,7 @@
     (ok (null (parse* "#\\|")))
     (ok (null (parse* "#\\:")))
     (ok (eq (context-in (parse* "#\\")) :character))
+    (ok (eq (context-in (parse* "'")) :form))
     (ok (null (parse* ";; \"
                       ")))
     (ok (eq (context-in (parse* ";; |")) :comment))
