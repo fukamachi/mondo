@@ -18,10 +18,11 @@
 
 (defstruct context
   (in nil :type context-in-type)
+  start
   function-name
   func-base-point
   arg-base-point
-  (skipped-count 0)
+  (element-count 0)
   inner-context)
 
 (defun function-name ()
@@ -42,11 +43,11 @@
 (defun (setf arg-base-point) (new-value)
   (setf (context-arg-base-point *context*) new-value))
 
-(defun skipped-count ()
-  (context-skipped-count *context*))
+(defun element-count ()
+  (context-element-count *context*))
 
-(defun (setf skipped-count) (new-value)
-  (setf (context-skipped-count *context*) new-value))
+(defun (setf element-count) (new-value)
+  (setf (context-element-count *context*) new-value))
 
 (defun inner-context ()
   (context-inner-context *context*))
@@ -68,10 +69,10 @@
                *context*))))
 
 (defun context-last-inner-context (context)
-  (loop for inner-context = (context-inner-context context)
-        if (not inner-context)
-        do (return context)
-        else do (setf context inner-context)))
+  (let ((inner-context (context-inner-context context)))
+    (if inner-context
+        (context-last-inner-context inner-context)
+        context)))
 
 (defstruct (buffer
              (:constructor make-buffer (input &key end
@@ -164,7 +165,8 @@
         do (loop do (forward-char buffer)
                  until (or (buffer-end-p buffer)
                            (not (find (current-char buffer) '(#\Newline #\Return)))))
-           (return)))
+           (return)
+        finally (incomplete-form 'comment)))
 
 (defun skip-block-comment (buffer)
   (assert (char= (current-char buffer) #\#))
@@ -185,13 +187,6 @@
   (loop until (buffer-end-p buffer)
         for char = (current-char buffer)
         do (cond
-             ((and (char= char #\#)
-                   (eql (next-char buffer) #\|))
-              (with-context (:comment)
-                (skip-block-comment buffer)))
-             ((char= char #\;)
-              (with-context (:comment)
-                (skip-inline-comment buffer)))
              ((char= char #\Return)
               (incf (buffer-line buffer))
               (or (forward-char buffer)
@@ -223,23 +218,40 @@
       (case char
         (#\"
          (with-context (:string)
-           (skip-string buffer)))
+           (skip-string buffer))
+         (incf (element-count)))
         (#\#
-         (forward-char buffer)
-         (skip-while buffer #'digit-char-p)
-         (when (or (buffer-end-p buffer)
-                   (space-char-p (current-char buffer)))
-           (return))
-         (forward-char buffer)
-         (skip-spaces buffer)
-         (when (buffer-end-p buffer)
-           (incomplete-form 'form))
-         (read-form buffer))
+         (case (next-char buffer)
+           (#\|
+            (with-context (:comment)
+              (skip-block-comment buffer)))
+           (#\\
+            (forward-char buffer)
+            (forward-char buffer)
+            (when (buffer-end-p buffer)
+              #+fixme(incomplete-form 'form)
+              (return))
+            (forward-char buffer))
+           (otherwise
+             (forward-char buffer)
+             (skip-while buffer #'digit-char-p)
+             (when (or (buffer-end-p buffer)
+                       (space-char-p (current-char buffer)))
+               ;; FIXME: no context
+               #+fixme(incomplete-form 'form)
+               (return))
+             (forward-char buffer)
+             (skip-spaces buffer)
+             (when (buffer-end-p buffer)
+               (incomplete-form 'form))
+             (read-form buffer))))
         (#\|
-         (if (eq (context-in *context*) :symbol)
+         (if (and *context*
+                  (eq (context-in *context*) :symbol))
              (skip-quoted-symbol buffer)
              (with-context (:symbol)
-               (skip-quoted-symbol buffer))))
+               (skip-quoted-symbol buffer)))
+         (incf (element-count)))
         (#\; (with-context (:comment)
                (skip-inline-comment buffer)))
         ((#\' #\` #\,)
@@ -265,22 +277,25 @@
                              (#\| (skip-quoted-symbol buffer))
                              (#\\ (skip-next-char buffer :type 'symbol))
                              (otherwise
-                               (forward-char buffer))))))
+                               (forward-char buffer)))
+                        finally (return *context*))))
            (if (eq (context-in *context*) :symbol)
                (read-symbol)
                (with-context (:symbol)
-                 (read-symbol)))))))))
+                 (read-symbol)))
+           (incf (element-count))))))))
 
 (defun read-list (buffer)
   (assert (char= (current-char buffer) #\())
   (with-context (:list)
+    (setf (context-start *context*) (buffer-point buffer))
     (forward-char buffer)
     (skip-spaces buffer)
     (when (buffer-end-p buffer)
       (incomplete-form 'list))
     (let ((start (buffer-point buffer))
           (line (buffer-line buffer)))
-      (setf (func-base-point) (1- start))
+      (setf (func-base-point) start)
       (loop with initial = t
             until (buffer-end-p buffer)
             for char = (current-char buffer)
@@ -293,8 +308,7 @@
                             (null (arg-base-point)))
                     (setf line (buffer-line buffer))
                     (setf (arg-base-point) (buffer-point buffer)))
-                  (read-list buffer)
-                  (incf (skipped-count)))
+                  (read-list buffer))
                  (otherwise
                   (when (and (not initial)
                              (or (/= line (buffer-line buffer))
@@ -302,14 +316,15 @@
                     (setf line (buffer-line buffer))
                     (setf (arg-base-point) (buffer-point buffer)))
                   (read-atom buffer)
-                  (if initial
-                      (with-slots (input point) buffer
-                        (setf (function-name) (subseq input start point)))
-                      (incf (skipped-count)))))
-               (setf initial nil)
+                  (when initial
+                    (setf initial nil)
+                    (with-slots (input point) buffer
+                      (setf (function-name) (subseq input start point))))))
                (skip-spaces buffer)
             finally
-            (incomplete-form 'list)))))
+            (incomplete-form 'list))))
+  (when *context*
+    (incf (element-count))))
 
 (defun read-form (buffer)
   (unless (buffer-end-p buffer)

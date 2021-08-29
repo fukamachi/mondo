@@ -20,5 +20,8 @@
                "rove")
   :pathname "tests"
   :components
-  ((:file "utils"))
+  ((:module "sexp"
+    :components
+    ((:file "parse")))
+   (:file "utils"))
   :perform (test-op (op c) (symbol-call '#:rove '#:run c)))

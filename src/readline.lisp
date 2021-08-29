@@ -125,7 +125,7 @@
 
 (defun newline-or-continue (&rest args)
   (declare (ignore args))
-  (if (input-complete-p rl:*line-buffer*)
+  (if (input-complete-p (format nil "~A~%" rl:*line-buffer*))
       (progn
         (format t "~%")
         (setf rl:*done* 1))

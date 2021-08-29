@@ -3,10 +3,11 @@
   (:import-from #:mondo/sexp/parse
                 #:parse
                 #:context-in
+                #:context-start
                 #:context-function-name
                 #:context-func-base-point
                 #:context-arg-base-point
-                #:context-skipped-count
+                #:context-element-count
                 #:context-inner-context
                 #:context-last-inner-context)
   (:export #:indent-input))
@@ -126,7 +127,7 @@
                  (indent-level-by-rule rule context)
                  (values nil context)))))
     (block nil
-      (let ((skipped-count (context-skipped-count context)))
+      (let ((skipped-count (1- (context-element-count context))))
         (values
           (etypecase rule
             (null nil)
@@ -172,7 +173,8 @@
          (rule (indentation-rule-of function-name)))
     (multiple-value-bind (level context)
         (indent-level-by-rule rule context)
-      (let ((func-base-point (context-func-base-point context))
+      (let ((form-start (context-start context))
+            (func-base-point (context-func-base-point context))
             (arg-base-point (context-arg-base-point context)))
         (flet ((calc-padding (p)
                  (if p
@@ -183,11 +185,10 @@
                      0)))
           (+ (or level 0)
              (calc-padding (if level
-                               func-base-point
+                               form-start
                                ;; arg-base-point will be NIL when no args exist
                                (or arg-base-point
-                                   (and func-base-point
-                                        (1+ func-base-point)))))))))))
+                                   func-base-point)))))))))
 
 (defun indent-input (input point prompt-length)
   (let* ((beginning-of-line (let ((pos (position #\Newline input
@@ -201,7 +202,7 @@
                                          :start beginning-of-line)
                             point))
          (context (parse input :end start-of-line))
-         (padding (if (member (context-in context)
+         (padding (if (member (context-in (context-last-inner-context context))
                               '(:string :comment :symbol))
                       0
                       (indent-level input context prompt-length))))
