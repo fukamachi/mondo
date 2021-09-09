@@ -17,11 +17,13 @@
 
 (defsystem "mondo/tests"
   :depends-on ("mondo"
-               "rove")
+               "rove"
+               "cl-interpol")
   :pathname "tests"
   :components
   ((:module "sexp"
     :components
-    ((:file "parse")))
+    ((:file "parse")
+     (:file "indent")))
    (:file "utils"))
   :perform (test-op (op c) (symbol-call '#:rove '#:run c)))
