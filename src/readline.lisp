@@ -3,7 +3,7 @@
   (:import-from #:mondo/color
                 #:color-text)
   (:import-from #:mondo/sexp/indent
-                #:indent-input)
+                #:indent-level)
   (:import-from #:mondo/sexp/parse
                 #:input-complete-p
                 #:function-at-point)
@@ -118,10 +118,21 @@
   (cffi:foreign-funcall "rl_expand_prompt" :string rl:+prompt+ :int))
 
 (defun indent ()
-  (let ((new-input (indent-input rl:*line-buffer* rl:*point* (prompt-length))))
-    (unless (equal rl:*line-buffer* new-input)
-      (replace-input new-input)
-      t)))
+  (flet ((on-2nd-line-p (end)
+           (not (find #\Newline rl:*line-buffer* :end end :from-end t))))
+    (multiple-value-bind (level replace-start replace-end)
+        (indent-level rl:*line-buffer* rl:*point*)
+      (unless (eql level (- replace-end replace-start))
+        (replace-input (concatenate 'string
+                                    (subseq rl:*line-buffer* 0 replace-start)
+                                    ;; When the cursor is on the 2nd line, add extra paddings
+                                    ;; which is equal to the width of prompt
+                                    (make-string (if (on-2nd-line-p (1- replace-start))
+                                                     (+ level (prompt-length))
+                                                     level)
+                                                 :initial-element #\Space)
+                                    (subseq rl:*line-buffer* replace-end)))
+        t))))
 
 (defun newline-or-continue (&rest args)
   (declare (ignore args))

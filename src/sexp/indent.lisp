@@ -10,7 +10,7 @@
                 #:context-element-count
                 #:context-inner-context
                 #:context-last-inner-context)
-  (:export #:indent-input))
+  (:export #:indent-level))
 (in-package #:mondo/sexp/indent)
 
 (defvar *indentation-rules*
@@ -168,7 +168,15 @@
                           (second (member '&whole subrule))))))))))
           context)))))
 
-(defun indent-level (input context prompt-length)
+(defun indent-input-with-context (input context)
+  (when (member (context-in (context-last-inner-context context))
+                '(:string :comment :symbol))
+    (return-from indent-input-with-context 0))
+
+  (when (and (eq (context-in (context-last-inner-context context)) :list)
+             (null (context-function-name context)))
+    (return-from indent-input-with-context 1))
+
   (let* ((function-name (context-function-name context))
          (rule (indentation-rule-of function-name)))
     (multiple-value-bind (level context)
@@ -181,7 +189,7 @@
                      (let ((base-padding (position #\Newline input :end p :from-end t)))
                        (if base-padding
                            (- p (1+ base-padding))
-                           (+ p prompt-length)))
+                           p))
                      0)))
           (+ (or level 0)
              (calc-padding (if level
@@ -190,7 +198,7 @@
                                (or arg-base-point
                                    func-base-point)))))))))
 
-(defun indent-input (input point prompt-length)
+(defun indent-level (input &optional (point (length input)))
   (let* ((beginning-of-line (let ((pos (position #\Newline input
                                                  :end point
                                                  :from-end t)))
@@ -201,12 +209,7 @@
                                                           (char= ch #\Newline))) input
                                          :start beginning-of-line)
                             point))
-         (context (parse input :end start-of-line))
-         (padding (if (member (context-in (context-last-inner-context context))
-                              '(:string :comment :symbol))
-                      0
-                      (indent-level input context prompt-length))))
-    (concatenate 'string
-                 (subseq input 0 beginning-of-line)
-                 (make-string padding :initial-element #\Space)
-                 (subseq input start-of-line))))
+         (context (parse input :end start-of-line)))
+    (values (indent-input-with-context input context)
+            beginning-of-line
+            start-of-line)))
