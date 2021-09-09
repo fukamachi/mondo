@@ -169,11 +169,11 @@
           context)))))
 
 (defun indent-input-with-context (input context)
-  (when (member (context-in (context-last-inner-context context))
+  (when (member (context-in context)
                 '(:string :comment :symbol))
     (return-from indent-input-with-context 0))
 
-  (when (and (eq (context-in (context-last-inner-context context)) :list)
+  (when (and (eq (context-in context) :list)
              (null (context-function-name context)))
     (return-from indent-input-with-context 1))
 
@@ -210,6 +210,6 @@
                                          :start beginning-of-line)
                             point))
          (context (parse input :end start-of-line)))
-    (values (indent-input-with-context input context)
+    (values (indent-input-with-context input (context-last-inner-context context))
             beginning-of-line
             start-of-line)))
