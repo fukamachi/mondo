@@ -20,7 +20,9 @@
                 #:debug-return-level
                 #:ignore-event
                 #:swank-listener-eval
-                #:swank-throw-to-toplevel)
+                #:swank-throw-to-toplevel
+                #:repl-action
+                #:invoke-repl-action)
   (:shadowing-import-from #:mondo/swank/protocol
                           #:debug)
   (:shadowing-import-from #:mondo/logger
@@ -145,23 +147,26 @@
                                             :no-history t))
                          (input (and input
                                      (string-space-trim input))))
-                    (multiple-value-bind (result success)
-                        (if input
-                            (cond
-                              ((integer-string-p input)
-                               (swank-invoke-restart event
-                                                     (parse-integer input)
-                                                     connection))
-                              ((or (string= input "a")
-                                   (string= input "abort"))
-                               (swank-debugger-abort event connection))
-                              (t
-                               (swank-listener-eval input connection
-                                                    :thread (debug-thread event))))
-                            (swank-debugger-abort event connection))
-                      (declare (ignore result))
-                      (unless success  ;; when aborted
-                        (return))))))))
+                    (handler-case
+                        (multiple-value-bind (result success)
+                            (if input
+                                (cond
+                                  ((integer-string-p input)
+                                   (swank-invoke-restart event
+                                                         (parse-integer input)
+                                                         connection))
+                                  ((or (string= input "a")
+                                       (string= input "abort"))
+                                   (swank-debugger-abort event connection))
+                                  (t
+                                   (swank-listener-eval input connection
+                                                        :thread (debug-thread event))))
+                                (swank-debugger-abort event connection))
+                          (declare (ignore result))
+                          (unless success  ;; when aborted
+                            (return)))
+                      (repl-action (e)
+                        (invoke-repl-action e))))))))
         #+sbcl
         (sb-sys:interactive-interrupt ()
           (swank-throw-to-toplevel (debug-thread event) connection))))))

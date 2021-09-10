@@ -36,6 +36,11 @@
            #:indentation-update
            #:new-features
            #:ignore-event
+           #:repl-action
+           #:repl-action-thread
+           #:read-string
+           #:abort-action
+           #:invoke-repl-action
 
            #:swank-require
            #:swank-create-repl
@@ -229,6 +234,27 @@
     (when restart
       (invoke-restart restart))))
 
+(define-condition repl-action ()
+  ((function :initarg :function
+             :reader repl-action-function)
+   (thread :initarg :thread
+           :reader repl-action-thread)
+   (message :initarg :message
+            :reader repl-action-message)))
+
+(define-condition read-string (repl-action)
+  ((tag :initarg :tag
+        :reader read-string-tag)))
+
+(define-condition abort-action (repl-action)
+  ((tag :initarg :tag
+        :reader abort-action-tag))
+  (:default-initargs
+   :function (lambda ())))
+
+(defun invoke-repl-action (action)
+  (funcall (repl-action-function action)))
+
 (defun invoke-event-in-main-thread (event main-thread)
   (bt:interrupt-thread main-thread #'invoke-event event))
 
@@ -246,6 +272,30 @@
          (declare (ignore target))
          (write-string output)
          (force-output))
+        ((:read-string thread tag)
+         (let ((function (lambda ()
+                           (multiple-value-bind (string missing-new-line)
+                               (loop
+                                 (handler-case
+                                     (return (read-line))
+                                   (end-of-file ())))
+                             (swank-send `(:emacs-return-string ,thread ,tag
+                                           ,(if missing-new-line
+                                                string
+                                                (format nil "~A~%" string)))
+                                         connection)))))
+           (invoke-event-in-main-thread (make-condition 'read-string
+                                                        :function function
+                                                        :thread thread
+                                                        :tag tag
+                                                        :message event)
+                                        main-thread)))
+        ((:read-aborted thread tag)
+         (invoke-event-in-main-thread (make-condition 'abort-action
+                                                      :thread thread
+                                                      :tag tag
+                                                      :message event)
+                                      main-thread))
         ((:new-package package-name &rest nicknames)
          (setf (connection-package connection)
                (find-shortest-nickname (cons package-name nicknames))))
@@ -323,10 +373,10 @@
                    connection
                    :thread thread))
 
-(defun swank-interrupt (connection)
+(defun swank-interrupt (connection &optional (thread :repl-thread))
   (#+sbcl sb-sys:without-interrupts
    #-sbcl progn
-   (send-message '(:emacs-interrupt :repl-thread)
+   (send-message `(:emacs-interrupt ,thread)
                  connection)))
 
 (defun swank-complete (prefix connection &optional (package-name (connection-package connection)))

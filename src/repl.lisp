@@ -20,7 +20,11 @@
                 #:swank-listener-eval
                 #:swank-complete
                 #:swank-arglist
-                #:swank-interrupt)
+                #:swank-interrupt
+                #:repl-action
+                #:repl-action-thread
+                #:invoke-repl-action
+                #:abort-action)
   (:import-from #:mondo/debugger
                 #:with-debugger)
   (:shadowing-import-from #:mondo/logger
@@ -166,11 +170,19 @@
                                               (setf result-ready t)
                                               (bt:condition-notify condvar))))
                      (loop
-                       (with-debugger* (*connection* :is-enabled use-debugger)
-                         (bt:with-lock-held (condlock)
-                           (loop until result-ready
-                                 do (bt:condition-wait condvar condlock)))
-                         (return)))
+                       (handler-case
+                           (with-debugger* (*connection* :is-enabled use-debugger)
+                             (bt:with-lock-held (condlock)
+                               (loop until result-ready
+                                     do (bt:condition-wait condvar condlock)))
+                             (return))
+                         (repl-action (e)
+                           (handler-case
+                               (invoke-repl-action e)
+                             (abort-action ())
+                             #+sbcl
+                             (sb-sys:interactive-interrupt ()
+                               (swank-interrupt *connection* (repl-action-thread e)))))))
                      (unless success
                        (format t "~&;; Aborted on ~A~%" result)))
                  #+sbcl
