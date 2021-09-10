@@ -55,7 +55,7 @@
 (in-package #:mondo/swank/protocol)
 
 (eval-when (:compile-toplevel :load-toplevel)
-  (swank:swank-require '(swank-repl swank-presentations)))
+  (swank:swank-require '(swank-repl swank-presentations swank-c-p-c)))
 
 (deftype octet ()
   '(unsigned-byte 8))
@@ -380,7 +380,7 @@
                  connection)))
 
 (defun swank-complete (prefix connection &optional (package-name (connection-package connection)))
-  (swank-rex `(swank:simple-completions ,prefix ',package-name)
+  (swank-rex `(swank:completions ,prefix ',package-name)
              connection))
 
 (defun swank-arglist (symbol-name connection &optional (package-name (connection-package connection)))

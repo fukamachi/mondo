@@ -43,7 +43,7 @@
 
 (defun initialize-swank-repl (connection)
   (log :debug "Initializing Swank REPL")
-  (swank-require '(swank-repl swank-presentations) connection)
+  (swank-require '(swank-repl swank-presentations swank-c-p-c) connection)
   (swank-create-repl connection)
   (swank-init-presentations connection)
   (multiple-value-bind (info success)
@@ -85,7 +85,8 @@
           (if success
               (destructuring-bind (candidates &optional common)
                   result
-                (cons common candidates))
+                (when candidates
+                  (cons common candidates)))
               (progn
                 (log :error "Completion failed")
                 nil))))))
