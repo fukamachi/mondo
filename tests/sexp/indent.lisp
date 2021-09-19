@@ -22,5 +22,5 @@
   (ok (eql 11 (indent-level #?"(funcall #'+\n         (progn\n")))
   (ok (eql 2 (indent-level #?"'(\n")))
   (ok (eql 2 (indent-level #?"'((\"a\" . 1)\n")))
-  (ok (eql 11 (indent-level #?"'((\"a\" . 1)\n           (\"b\" . 2)\n")))
+  (ok (eql 2 (indent-level #?"'((\"a\" . 1)\n           (\"b\" . 2)\n")))
   (ok (eql 2 (indent-level #?"(do ()\n             ()\n"))))

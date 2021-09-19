@@ -196,17 +196,14 @@
 (defun indent-input-with-context (input context)
   (when (member (context-in context)
                 '(:string :comment :symbol))
-    (return-from indent-input-with-context 0))
+    (return-from indent-input-with-context
+                 (values 0 (context-start context))))
 
   (when (and (eq (context-in context) :list)
              (null (context-function-name context)))
     (return-from indent-input-with-context
-                 (let ((base-point (or (context-arg-base-point context)
-                                       (context-func-base-point context))))
-                   (if base-point
-                       (- base-point
-                          (calc-padding-at input base-point))
-                       (1+ (context-start context))))))
+                 (values (1+ (context-start context))
+                         (1+ (context-start context)))))
 
   (let* ((function-name (context-function-name context))
          (rule (indentation-rule-of function-name)))
