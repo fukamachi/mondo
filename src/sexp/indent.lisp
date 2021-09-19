@@ -168,6 +168,12 @@
                           (second (member '&whole subrule))))))))))
           context)))))
 
+(defun calc-padding-at (input point)
+  (let ((newline-pos (position #\Newline input :end point :from-end t)))
+    (if newline-pos
+        (1+ newline-pos)
+        0)))
+
 (defun indent-input-with-context (input context)
   (when (member (context-in context)
                 '(:string :comment :symbol))
@@ -175,7 +181,13 @@
 
   (when (and (eq (context-in context) :list)
              (null (context-function-name context)))
-    (return-from indent-input-with-context 1))
+    (return-from indent-input-with-context
+                 (let ((base-point (or (context-arg-base-point context)
+                                       (context-func-base-point context))))
+                   (if base-point
+                       (- base-point
+                          (calc-padding-at input base-point))
+                       (1+ (context-start context))))))
 
   (let* ((function-name (context-function-name context))
          (rule (indentation-rule-of function-name)))
@@ -186,10 +198,7 @@
             (arg-base-point (context-arg-base-point context)))
         (flet ((calc-padding (p)
                  (if p
-                     (let ((base-padding (position #\Newline input :end p :from-end t)))
-                       (if base-padding
-                           (- p (1+ base-padding))
-                           p))
+                     (- p (calc-padding-at input p))
                      0)))
           (+ (or level 0)
              (calc-padding (if level
@@ -199,12 +208,7 @@
                                    func-base-point)))))))))
 
 (defun indent-level (input &optional (point (length input)))
-  (let* ((beginning-of-line (let ((pos (position #\Newline input
-                                                 :end point
-                                                 :from-end t)))
-                              (if pos
-                                  (1+ pos)
-                                  0)))
+  (let* ((beginning-of-line (calc-padding-at input point))
          (start-of-line (or (position-if (lambda (ch) (or (char/= ch #\Space)
                                                           (char= ch #\Newline))) input
                                          :start beginning-of-line)
