@@ -10,10 +10,11 @@
                 #:context-element-count
                 #:context-inner-context
                 #:context-last-inner-context)
-  (:export #:indent-level))
+  (:export #:update-indentation-rules
+           #:indent-level))
 (in-package #:mondo/sexp/indent)
 
-(defvar *indentation-rules*
+(defparameter *indentation-rules*
   '((block 1)
     (case        (4 &rest (&whole 2 &rest 1)))
     (ccase       (as case))
@@ -93,11 +94,29 @@
     (with-slots              (as multiple-value-bind))
     (with-standard-io-syntax (2))))
 
-(defun indentation-rule-of (function-name)
-  (second
-    (find function-name *indentation-rules*
-          :key #'first
-          :test 'string-equal)))
+(defvar *custom-indentation-rules* '())
+
+(defun indentation-rule-of (function-name &optional package-name)
+  (let ((custom-rule (find function-name *custom-indentation-rules*
+                           :key #'first
+                           :test 'string-equal)))
+    (second
+      (if (and custom-rule
+               (or (null package-name)
+                   (find package-name (third custom-rule) :test 'equal)))
+          custom-rule
+          (find function-name *indentation-rules*
+                :key #'first
+                :test 'string-equal)))))
+
+(defun add-indentation-rule (function-name rule package-names)
+  (setf *custom-indentation-rules*
+        (cons (list function-name rule package-names)
+              *custom-indentation-rules*)))
+
+(defun update-indentation-rules (rules)
+  (dolist (rule rules)
+    (apply #'add-indentation-rule rule)))
 
 (defun take-nth-subrule-in-rule (rule nth)
   (labels ((take-last (el rest)

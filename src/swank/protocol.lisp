@@ -34,6 +34,7 @@
            #:debug-activate
            #:debug-return
            #:indentation-update
+           #:indentation-update-info
            #:new-features
            #:ignore-event
            #:repl-action

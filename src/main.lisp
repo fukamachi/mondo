@@ -7,12 +7,16 @@
                 #:connect-to-swank-server
                 #:start-processing
                 #:event
-                #:ignore-event)
+                #:ignore-event
+                #:indentation-update
+                #:indentation-update-info)
   (:import-from #:mondo/repl
                 #:run-repl)
   (:import-from #:mondo/server
                 #:start-mondo-server
                 #:receive-event)
+  (:import-from #:mondo/sexp/indent
+                #:update-indentation-rules)
   (:import-from #:mondo/logger
                 #:with-logging
                 #:remove-old-log-files)
@@ -80,6 +84,9 @@
                                     :swank-connection connection))))
 
         (with-forward-events (mondo-server)
-          (run-repl directory
-                    :connection connection
-                    :use-debugger (not mondo-server)))))))
+          (handler-bind ((indentation-update
+                           (lambda (e)
+                             (update-indentation-rules (indentation-update-info e)))))
+            (run-repl directory
+                      :connection connection
+                      :use-debugger (not mondo-server))))))))
