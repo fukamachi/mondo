@@ -121,7 +121,7 @@
   (flet ((on-1st-line-p (point)
            (not (find #\Newline rl:*line-buffer* :end point :from-end t))))
     (multiple-value-bind (level base-point replace-start replace-end)
-        (indent-level rl:*line-buffer* rl:*point*)
+        (indent-level rl:*line-buffer*)
       (unless (eql level (- replace-end replace-start))
         (replace-input (concatenate 'string
                                     (subseq rl:*line-buffer* 0 replace-start)
