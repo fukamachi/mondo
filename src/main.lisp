@@ -9,7 +9,12 @@
                 #:event
                 #:ignore-event
                 #:indentation-update
-                #:indentation-update-info)
+                #:indentation-update-info
+                #:new-package
+                #:new-package-name
+                #:new-package-nicknames
+                #:connection-package-name
+                #:connection-package-nicknames)
   (:import-from #:mondo/repl
                 #:run-repl)
   (:import-from #:mondo/server
@@ -86,7 +91,13 @@
         (with-forward-events (mondo-server)
           (handler-bind ((indentation-update
                            (lambda (e)
-                             (update-indentation-rules (indentation-update-info e)))))
+                             (update-indentation-rules (indentation-update-info e))))
+                         (new-package
+                           (lambda (e)
+                             (setf (connection-package-name connection)
+                                   (new-package-name e))
+                             (setf (connection-package-nicknames connection)
+                                   (new-package-nicknames e)))))
             (run-repl directory
                       :connection connection
                       :use-debugger (not mondo-server))))))))

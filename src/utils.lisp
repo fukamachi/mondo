@@ -20,7 +20,7 @@
 
 (defun find-shortest-nickname (package-names)
   (first
-    (sort package-names
+    (sort (copy-seq package-names)
           #'<=
           :key #'length)))
 

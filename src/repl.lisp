@@ -10,7 +10,8 @@
   (:import-from #:mondo/sexp/parse
                 #:function-at-point)
   (:import-from #:mondo/swank
-                #:connection-package
+                #:connection-package-name
+                #:connection-package-nicknames
                 #:connection-host
                 #:connection-port
                 #:swank-require
@@ -32,6 +33,7 @@
   (:import-from #:mondo/color
                 #:color-text)
   (:import-from #:mondo/utils
+                #:find-shortest-nickname
                 #:add-exit-hook)
   (:import-from #:bordeaux-threads)
   (:import-from #:alexandria
@@ -59,13 +61,16 @@
                 pid)
         (destructuring-bind (&key name prompt)
             package
-          (declare (ignore name))
+          (when (stringp name)
+            (setf (connection-package-name connection) name))
           (when (stringp prompt)
-            (setf (connection-package connection) prompt)))))))
+            (setf (connection-package-nicknames connection) (list prompt))))))))
 
 (defun prompt-string ()
   (format nil "~A> "
-          (connection-package *connection*)))
+          (find-shortest-nickname
+            (cons (connection-package-name *connection*)
+                  (connection-package-nicknames *connection*)))))
 
 (defun symbol-complete (text start end)
   (declare (ignore start end))

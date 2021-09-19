@@ -13,7 +13,8 @@
            #:connection-host
            #:connection-port
            #:connection-socket
-           #:connection-package
+           #:connection-package-name
+           #:connection-package-nicknames
            #:connection-process-thread
            #:connection-lock
            #:connection-continuation-counter
@@ -27,7 +28,8 @@
   (host "127.0.0.1" :type string)
   (port 4005 :type integer)
   (socket nil :type (or usocket:stream-usocket null))
-  (package "CL-USER" :type string)
+  (package-name "COMMON-LISP-USER" :type string)
+  (package-nicknames '("CL-USER") :type list)
   (process-thread nil)
   (lock (bt:make-recursive-lock "mondo connection lock"))
   (continuation-counter 0 :type integer)

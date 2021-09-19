@@ -3,7 +3,7 @@
   (:shadow #:debug)
   (:import-from #:mondo/swank/connection
                 #:connection
-                #:connection-package
+                #:connection-package-name
                 #:connection-lock
                 #:connection-socket
                 #:connection-continuation-counter
@@ -11,7 +11,6 @@
   (:shadowing-import-from #:mondo/logger
                           #:log)
   (:import-from #:mondo/utils
-                #:find-shortest-nickname
                 #:string-to-octets
                 #:octets-to-string)
   (:import-from #:swank)
@@ -36,6 +35,10 @@
            #:indentation-update
            #:indentation-update-info
            #:new-features
+           #:new-features-features
+           #:new-package
+           #:new-package-name
+           #:new-package-nicknames
            #:ignore-event
            #:repl-action
            #:repl-action-thread
@@ -221,6 +224,12 @@
   ((features :initarg :features
              :reader new-features-features)))
 
+(define-condition new-package (event)
+  ((name :initarg :name
+         :reader new-package-name)
+   (nicknames :initarg :nicknames
+              :reader new-package-nicknames)))
+
 (define-condition indentation-update (event)
   ((info :initarg :info
          :reader indentation-update-info)))
@@ -298,8 +307,10 @@
                                                       :message event)
                                       main-thread))
         ((:new-package package-name &rest nicknames)
-         (setf (connection-package connection)
-               (find-shortest-nickname (cons package-name nicknames))))
+         (invoke-event-in-main-thread (make-condition 'new-package
+                                                      :name package-name
+                                                      :nicknames nicknames)
+                                      main-thread))
         ((:new-features features)
          (invoke-event-in-main-thread (make-condition 'new-features
                                                       :features features
@@ -366,7 +377,7 @@
              #'swank-rex)
          `(swank-repl:listener-eval ,input)
          connection
-         :package (connection-package connection)
+         :package (connection-package-name connection)
          args))
 
 (defun swank-invoke-nth-restart (thread level restart-num connection)
@@ -380,11 +391,11 @@
    (send-message `(:emacs-interrupt ,thread)
                  connection)))
 
-(defun swank-complete (prefix connection &optional (package-name (connection-package connection)))
+(defun swank-complete (prefix connection &optional (package-name (connection-package-name connection)))
   (swank-rex `(swank:completions ,prefix ',package-name)
              connection))
 
-(defun swank-arglist (symbol-name connection &optional (package-name (connection-package connection)))
+(defun swank-arglist (symbol-name connection &optional (package-name (connection-package-name connection)))
   (swank-rex `(swank:operator-arglist ,symbol-name ',package-name)
              connection))
 
