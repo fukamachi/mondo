@@ -219,12 +219,15 @@
                  (if p
                      (- p (calc-padding-at input p))
                      0)))
-          (+ (or level 0)
-             (calc-padding (if level
-                               form-start
-                               ;; arg-base-point will be NIL when no args exist
-                               (or arg-base-point
-                                   func-base-point)))))))))
+          (let ((base-point (if level
+                                form-start
+                                ;; arg-base-point will be NIL when no args exist
+                                (or arg-base-point
+                                    func-base-point))))
+            (values
+              (+ (or level 0)
+                 (calc-padding base-point))
+              base-point)))))))
 
 (defun indent-level (input &optional (point (length input)))
   (let* ((beginning-of-line (calc-padding-at input point))
@@ -233,6 +236,9 @@
                                          :start beginning-of-line)
                             point))
          (context (parse input :end start-of-line)))
-    (values (indent-input-with-context input (context-last-inner-context context))
-            beginning-of-line
-            start-of-line)))
+    (multiple-value-bind (level base-point)
+        (indent-input-with-context input (context-last-inner-context context))
+      (values level
+              base-point
+              beginning-of-line
+              start-of-line))))

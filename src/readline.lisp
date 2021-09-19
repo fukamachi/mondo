@@ -118,16 +118,16 @@
   (cffi:foreign-funcall "rl_expand_prompt" :string rl:+prompt+ :int))
 
 (defun indent ()
-  (flet ((on-2nd-line-p (end)
-           (not (find #\Newline rl:*line-buffer* :end end :from-end t))))
-    (multiple-value-bind (level replace-start replace-end)
+  (flet ((on-1st-line-p (point)
+           (not (find #\Newline rl:*line-buffer* :end point :from-end t))))
+    (multiple-value-bind (level base-point replace-start replace-end)
         (indent-level rl:*line-buffer* rl:*point*)
       (unless (eql level (- replace-end replace-start))
         (replace-input (concatenate 'string
                                     (subseq rl:*line-buffer* 0 replace-start)
-                                    ;; When the cursor is on the 2nd line, add extra paddings
+                                    ;; When the base point is on the 1st line, add extra paddings
                                     ;; which is equal to the width of prompt
-                                    (make-string (if (on-2nd-line-p (1- replace-start))
+                                    (make-string (if (on-1st-line-p base-point)
                                                      (+ level (prompt-length))
                                                      level)
                                                  :initial-element #\Space)
