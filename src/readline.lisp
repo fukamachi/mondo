@@ -96,9 +96,6 @@
          (rl:set-keymap ,before)))))
 
 (defun complete ()
-  (let ((func (function-at-point rl:*line-buffer* rl:*point*)))
-    (unless func
-      (return-from complete)))
   (cffi:foreign-funcall "rl_complete" :int 9 :int 0)
   (cffi:foreign-funcall "rl_possible_completions" :int 1 :int 0))
 

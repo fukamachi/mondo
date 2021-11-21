@@ -75,26 +75,29 @@
 (defun symbol-complete (text start end)
   (declare (ignore start end))
   (let ((func (function-at-point rl:*line-buffer* rl:*point*)))
-    (if (or (string= text "")
-            (not (equal text func)))
-        (multiple-value-bind (result success)
-            (swank-arglist func *connection*)
-          (if success
-              (and result
-                   (list "" (color-text :gray result)))
-              (progn
-                (log :error "Displaying arglist is failed")
-                nil)))
-        (multiple-value-bind (result success)
-            (swank-complete func *connection*)
-          (if success
-              (destructuring-bind (candidates &optional common)
-                  result
-                (when candidates
-                  (cons common candidates)))
-              (progn
-                (log :error "Completion failed")
-                nil))))))
+    (unless (and (equal text "")
+                 (null func))
+      (if (and func
+               (or (string= text "")
+                   (not (equal text func))))
+          (multiple-value-bind (result success)
+              (swank-arglist func *connection*)
+            (if success
+                (and result
+                     (list "" (color-text :gray result)))
+                (progn
+                  (log :error "Displaying arglist is failed")
+                  nil)))
+          (multiple-value-bind (result success)
+              (swank-complete (or func text) *connection*)
+            (if success
+                (destructuring-bind (candidates &optional common)
+                    result
+                  (when candidates
+                    (cons common candidates)))
+                (progn
+                  (log :error "Completion failed")
+                  nil)))))))
 
 (defvar *previous-completions* nil)
 
