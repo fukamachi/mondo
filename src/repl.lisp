@@ -91,7 +91,7 @@
           (multiple-value-bind (result success)
               (swank-complete (or func text) *connection*)
             (if success
-                (destructuring-bind (candidates &optional common)
+                (destructuring-bind (&optional candidates common)
                     result
                   (when candidates
                     (cons common candidates)))
