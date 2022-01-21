@@ -1,9 +1,7 @@
 (defpackage #:mondo/swank/server
   (:use #:cl)
   (:shadowing-import-from #:mondo/logger
-                          #:log
-                          #:*log-level*
-                          #:+debug+)
+                          #:log)
   (:import-from #:mondo/utils
                 #:random-port)
   (:import-from #:usocket)
@@ -37,8 +35,7 @@
 
 (defun create-swank-server (&key lisp source-registry quicklisp port)
   (let ((lisp (or lisp "sbcl-bin"))
-        (port (or port (random-port)))
-        (debug-mode (eql *log-level* +debug+)))
+        (port (or port (random-port))))
     (log :debug "Starting a swank server on ~A at port=~A" lisp port)
     (let ((process (handler-case
                        (uiop:launch-program
@@ -50,12 +47,13 @@
                                            ,@(when source-registry
                                                `("-S" ,source-registry))
                                            "-s" "swank"
+                                           ;; To muffle outputs from Swank on startup
+                                           "-e" "(setf swank::*swank-debug-p* nil swank::*log-output* (make-broadcast-stream))"
+                                           "-e" "(handler-bind (#+sbcl (sb-kernel:redefinition-warning #'muffle-warning)) (swank:swank-require 'swank-repl))"
                                            "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")))
                          :input :stream
                          :output nil
-                         :error-output (if debug-mode
-                                           t
-                                           :stream))
+                         :error-output t)
                      (error (e)
                        (log :error "Failed to start a swank server: ~A" e)
                        (uiop:quit -1)))))
@@ -69,11 +67,7 @@
               when (server-running-p port)
               do (return)
               unless (uiop:process-alive-p process)
-              do (if debug-mode
-                     (log :error "Failed to start a swank server")
-                     (log :error "Failed to start a swank server: ~A"
-                          (string-right-trim '(#\Newline #\Return)
-                                             (uiop:slurp-stream-string (uiop:process-info-error-output process)))))
+              do (log :error "Failed to start a swank server")
                  (uiop:quit -1)
               finally
               (progn
