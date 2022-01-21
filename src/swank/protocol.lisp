@@ -309,7 +309,8 @@
         ((:new-package package-name &rest nicknames)
          (invoke-event-in-main-thread (make-condition 'new-package
                                                       :name package-name
-                                                      :nicknames nicknames)
+                                                      :nicknames nicknames
+                                                      :message event)
                                       main-thread))
         ((:new-features features)
          (invoke-event-in-main-thread (make-condition 'new-features
