@@ -1,7 +1,9 @@
 (defpackage #:mondo/swank/server
   (:use #:cl)
   (:shadowing-import-from #:mondo/logger
-                          #:log)
+                          #:log
+                          #:*log-level*
+                          #:+debug+)
   (:import-from #:mondo/utils
                 #:random-port)
   (:import-from #:usocket)
@@ -35,7 +37,8 @@
 
 (defun create-swank-server (&key lisp source-registry quicklisp port)
   (let ((lisp (or lisp "sbcl-bin"))
-        (port (or port (random-port))))
+        (port (or port (random-port)))
+        (debug-mode (eql *log-level* +debug+)))
     (log :debug "Starting a swank server on ~A at port=~A" lisp port)
     (let ((process (handler-case
                        (uiop:launch-program
@@ -50,7 +53,9 @@
                                            "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")))
                          :input :stream
                          :output nil
-                         :error-output :stream)
+                         :error-output (if debug-mode
+                                           t
+                                           :stream))
                      (error (e)
                        (log :error "Failed to start a swank server: ~A" e)
                        (uiop:quit -1)))))
@@ -64,10 +69,12 @@
               when (server-running-p port)
               do (return)
               unless (uiop:process-alive-p process)
-              do (log :error "Failed to start a swank server: ~A"
-                      (string-right-trim '(#\Newline #\Return)
-                                         (uiop:slurp-stream-string (uiop:process-info-error-output process))))
-              (uiop:quit -1)
+              do (if debug-mode
+                     (log :error "Failed to start a swank server")
+                     (log :error "Failed to start a swank server: ~A"
+                          (string-right-trim '(#\Newline #\Return)
+                                             (uiop:slurp-stream-string (uiop:process-info-error-output process)))))
+                 (uiop:quit -1)
               finally
               (progn
                 (log :error "Took too long for the server to start. Timeout.")
