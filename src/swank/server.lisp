@@ -53,7 +53,7 @@
                                            "-e" ,(format nil "(swank:create-server :port ~D :dont-close t)" port) "run")))
                          :input :stream
                          :output nil
-                         :error-output t)
+                         :error-output :interactive)
                      (error (e)
                        (log :error "Failed to start a swank server: ~A" e)
                        (uiop:quit -1)))))
