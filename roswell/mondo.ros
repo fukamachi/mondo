@@ -11,7 +11,7 @@ exec ros -Q -- $0 "$@"
                     #:usocket
                     #:alexandria
                     #-(or sbcl allegro ccl clisp) #:babel) :silent t))
-  (ql:quickload '(#:mondo/cli) :silent t))
+  (ql:quickload '(#:mondo) :silent t))
 
 (defpackage :ros.script.mondo
   (:use :cl))
